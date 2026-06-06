@@ -1,0 +1,6 @@
+{
+  "name": "دادرس هوشمند",
+  "description": "پلتفرم هوشمند تحلیل و تولید اسناد حقوقی ایران مبتنی بر هوش مصنوعی (MVP)",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
