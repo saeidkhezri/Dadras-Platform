@@ -39,6 +39,7 @@ fun LoginScreen(
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
+    var showCreditsDialog by remember { mutableStateOf(false) }
 
     // Dynamic Glass Theme attributes
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -108,7 +109,7 @@ fun LoginScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = "سامانه مستقل دادرس هوشمند",
+                    text = "سامانه دادرس هوشمند",
                     style = Typography.displayMedium,
                     color = onBgColor,
                     fontWeight = FontWeight.Bold,
@@ -140,7 +141,7 @@ fun LoginScreen(
                         if (!isPasswordChangeRequired) {
                             // Standard Entry
                             Text(
-                                text = "ورود به پیشخوان امنیتی",
+                                text = "ورود به حساب کاربری",
                                 style = Typography.titleLarge,
                                 color = onBgColor,
                                 fontWeight = FontWeight.Bold,
@@ -167,7 +168,7 @@ fun LoginScreen(
                             OutlinedTextField(
                                 value = password,
                                 onValueChange = { password = it },
-                                placeholder = { Text("رمز عبور سامانه مستقل", color = onSurfaceColor) },
+                                placeholder = { Text("رمز عبور", color = onSurfaceColor) },
                                 singleLine = true,
                                 visualTransformation = PasswordVisualTransformation(),
                                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryAccent) },
@@ -208,7 +209,7 @@ fun LoginScreen(
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
-                                    text = "احراز هویت و ورود امن مستقل",
+                                    text = "ورود به سامانه",
                                     style = Typography.titleMedium,
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold
@@ -232,7 +233,7 @@ fun LoginScreen(
                                     textAlign = TextAlign.Right
                                 )
                                 Text(
-                                    text = "ورود بر اساس اعتبارسنجی مستقل امنیتی لایه اورکستراتور در سه نقش مدیر سیستم، شهروند ویژه و کارشناسان حقوقی انجام می‌پذیرد. مشخصات ورود پیش‌فرض کاربران در دفترچه مستقل ثبت شده است.",
+                                    text = "ورود کاربران در سه نقش مدیر سیستم، کاربر عادی ویژه و کارشناسان حقوقی انجام می‌پذیرد. مشخصات ورود پیش‌فرض کاربران در دفترچه راهنما ثبت شده است.",
                                     color = onSurfaceColor,
                                     style = Typography.labelSmall,
                                     modifier = Modifier.fillMaxWidth(),
@@ -252,7 +253,7 @@ fun LoginScreen(
                             )
 
                             Text(
-                                text = "بنا به دلایل امنیتی و فعال‌سازی پروتکل‌های ملی، رمز عبور پیش‌فرض ادمین را تغییر دهید.",
+                                text = "برای حفاظت از اطلاعات کاربری، رمز عبور پیش‌فرض مدیریت را تغییر دهید.",
                                 style = Typography.bodyMedium,
                                 color = onSurfaceColor,
                                 textAlign = TextAlign.Right,
@@ -317,9 +318,9 @@ fun LoginScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        Pair("قاضی", "به‌زودی"),
+                        Pair("مقام قضایی", "به‌زودی"),
                         Pair("وکیل", "به‌زودی"),
-                        Pair("شهروند", "فعال"),
+                        Pair("کاربر عادی", "فعال"),
                         Pair("مدیر سیستم", "فعال")
                     ).forEach { roleInfo ->
                         Box(
@@ -339,6 +340,177 @@ fun LoginScreen(
                                     color = if (roleInfo.second == "فعال") MaterialTheme.colorScheme.tertiary else onSurfaceColor,
                                     fontWeight = FontWeight.SemiBold
                                 )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                // Owners & Authors Credits Card
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { showCreditsDialog = true }
+                        .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
+                    colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.85f))
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "مالکان و توسعه‌دهندگان سامانه",
+                            color = AccentGold,
+                            style = Typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Divider(color = glassBorderColor.copy(alpha = 0.5f), thickness = 1.dp)
+                        
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "محمدسعید خضریپور",
+                                color = Color.White,
+                                style = Typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "بخش فنی و پیاده‌سازی هوش مصنوعی:",
+                                color = onSurfaceColor,
+                                style = Typography.labelSmall
+                            )
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "دکتر حسین پورمحی‌آبادی",
+                                color = Color.White,
+                                style = Typography.labelMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "صحت‌سنجی فقهی و انطباق حقوقی:",
+                                color = onSurfaceColor,
+                                style = Typography.labelSmall
+                            )
+                        }
+                    }
+                }
+
+                // Popup dialog explaining detailed roles and technical contributions
+                if (showCreditsDialog) {
+                    androidx.compose.ui.window.Dialog(
+                        onDismissRequest = { showCreditsDialog = false }
+                    ) {
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            shape = RoundedCornerShape(20.dp),
+                            color = Color(0xFF0C1324), // Solid dark navy background to block background texts completely
+                            border = androidx.compose.foundation.BorderStroke(1.5.dp, AccentGold)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(20.dp),
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    .also { println("") } // Empty print for syntactical boundary safety
+                            ) {
+                                Text(
+                                    text = "مالکان و توسعه‌دهندگان سامانه مستقل دادرس",
+                                    style = Typography.titleMedium,
+                                    color = AccentGold,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Right,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                Divider(color = AccentGold.copy(alpha = 0.3f))
+
+                                // Person 1: Khezripour
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "محمدسعید خضری‌پور",
+                                        style = Typography.bodyLarge,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Right
+                                    )
+                                    Text(
+                                        text = "نقش: بنیان‌گذار مشترک، مدیر بخش فنی و برنامه‌نویسی هوشمند مستقل",
+                                        style = Typography.labelSmall,
+                                        color = AccentGold,
+                                        textAlign = TextAlign.Right
+                                    )
+                                    Text(
+                                        text = "عهده‌دار برنامه‌نویسی کلیدی اپلیکیشن، زیرساخت و معماری استدلال هوش مصنوعی و پیاده‌سازی همیار مستقل.",
+                                        style = Typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.8f),
+                                        textAlign = TextAlign.Right
+                                    )
+                                }
+
+                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                                // Person 2: Pourmohyabadi
+                                Column(
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "دکتر حسین پورمحی‌آبادی",
+                                        style = Typography.bodyLarge,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Right
+                                    )
+                                    Text(
+                                        text = "نقش: بنیان‌گذار مشترک، مدیر علمی، انطباق فقهی و صحت‌سنجی فتاوا",
+                                        style = Typography.labelSmall,
+                                        color = AccentGold,
+                                        textAlign = TextAlign.Right
+                                    )
+                                    Text(
+                                        text = "عهده‌دار تدوین قواعد فقهی، انطباق احکام موضوعه بر ادله اثباتی و تایید علمی و شرعی لوایح صادر شده.",
+                                        style = Typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.8f),
+                                        textAlign = TextAlign.Right
+                                    )
+                                }
+
+                                Spacer(modifier = Modifier.height(8.dp))
+
+                                Button(
+                                    onClick = { showCreditsDialog = false },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = "بستن اعتبارنامه",
+                                        style = Typography.bodyMedium,
+                                        color = Color.Black,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
                             }
                         }
                     }

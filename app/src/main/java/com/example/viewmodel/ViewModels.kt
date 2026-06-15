@@ -1,6 +1,7 @@
 package com.example.viewmodel
 
 import android.app.Application
+import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
@@ -11,9 +12,9 @@ import org.json.JSONObject
 // تعریف نقش‌های کاربری
 enum class UserRole(val label: String) {
     ADMIN("مدیر سیستم"),
-    CITIZEN("شهروند"),
+    CITIZEN("کاربر عادی"),
     LAWYER("وکیل (به‌زودی)"),
-    JUDGE("قاضی (به‌زودی)")
+    JUDGE("مقام قضایی (به‌زودی)")
 }
 
 data class UserSession(
@@ -189,6 +190,136 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
 
     val activityLogs: StateFlow<List<ActivityLogEntity>> = logDao.getAllLogs()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    // ذخیره کلیدهای هوش بر اساس اولویت پنل و سه کلید پشتیبان فعال
+    private val _geminiApiKey = MutableStateFlow("")
+    val geminiApiKey = _geminiApiKey.asStateFlow()
+
+    private val _openaiApiKey = MutableStateFlow("")
+    val openaiApiKey = _openaiApiKey.asStateFlow()
+
+    private val _openrouterApiKey = MutableStateFlow("")
+    val openrouterApiKey = _openrouterApiKey.asStateFlow()
+
+    private val _geminiApiKeys = MutableStateFlow<List<String>>(emptyList())
+    val geminiApiKeys = _geminiApiKeys.asStateFlow()
+
+    private val _openaiApiKeys = MutableStateFlow<List<String>>(emptyList())
+    val openaiApiKeys = _openaiApiKeys.asStateFlow()
+
+    private val _openrouterApiKeys = MutableStateFlow<List<String>>(emptyList())
+    val openrouterApiKeys = _openrouterApiKeys.asStateFlow()
+
+    init {
+        val prefs = application.getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
+        
+        // در اولین راه‌اندازی، کلیدهای پرمیوم به‌طور پیش‌فرض در دیتابیس محلی بارگذاری می‌شوند تا سامانه کاملاً فعال باشد
+        if (!prefs.contains("keys_initialized")) {
+            val defaultOpenRouterKey1 = com.example.network.KeyEncryptor.deobfuscate("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")
+            val defaultOpenRouterKey2 = com.example.network.KeyEncryptor.deobfuscate("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")
+            
+            val defaultOpenAiKey1 = com.example.network.KeyEncryptor.deobfuscate("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")
+            val defaultOpenAiKey2 = com.example.network.KeyEncryptor.deobfuscate("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")
+            val defaultOpenAiKey3 = com.example.network.KeyEncryptor.deobfuscate("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")
+            
+            val defaultGeminiKey = try { com.example.BuildConfig.GEMINI_API_KEY } catch (e: Exception) { "" }
+
+            prefs.edit()
+                .putString("gemini_key_1", defaultGeminiKey)
+                .putString("gemini_key_2", "")
+                .putString("gemini_key_3", "")
+                .putString("openrouter_key_1", defaultOpenRouterKey1)
+                .putString("openrouter_key_2", defaultOpenRouterKey2)
+                .putString("openrouter_key_3", "")
+                .putString("openai_key_1", defaultOpenAiKey1)
+                .putString("openai_key_2", defaultOpenAiKey2)
+                .putString("openai_key_3", defaultOpenAiKey3)
+                .putBoolean("keys_initialized", true)
+                .apply()
+        }
+
+        val g1 = prefs.getString("gemini_key_1", "") ?: ""
+        val g2 = prefs.getString("gemini_key_2", "") ?: ""
+        val g3 = prefs.getString("gemini_key_3", "") ?: ""
+
+        val o1 = prefs.getString("openai_key_1", "") ?: ""
+        val o2 = prefs.getString("openai_key_2", "") ?: ""
+        val o3 = prefs.getString("openai_key_3", "") ?: ""
+
+        val or1 = prefs.getString("openrouter_key_1", "") ?: ""
+        val or2 = prefs.getString("openrouter_key_2", "") ?: ""
+        val or3 = prefs.getString("openrouter_key_3", "") ?: ""
+
+        _geminiApiKeys.value = listOf(g1, g2, g3)
+        _openaiApiKeys.value = listOf(o1, o2, o3)
+        _openrouterApiKeys.value = listOf(or1, or2, or3)
+
+        _geminiApiKey.value = g1.ifBlank { g2.ifBlank { g3 } }
+        _openaiApiKey.value = o1.ifBlank { o2.ifBlank { o3 } }
+        _openrouterApiKey.value = or1.ifBlank { or2.ifBlank { or3 } }
+
+        syncOrchestratorKeys()
+    }
+
+    private fun syncOrchestratorKeys() {
+        val gemini = _geminiApiKeys.value.firstOrNull { it.isNotBlank() } ?: ""
+        val openai = _openaiApiKeys.value.firstOrNull { it.isNotBlank() } ?: ""
+        val openrouter = _openrouterApiKeys.value.firstOrNull { it.isNotBlank() } ?: ""
+
+        com.example.network.AiOrchestrator.adminGeminiKey = gemini
+        com.example.network.AiOrchestrator.adminOpenRouterKey = openrouter
+        com.example.network.AiOrchestrator.adminOpenAiKey = openai
+        
+        com.example.network.AiOrchestrator.geminiKeysList = _geminiApiKeys.value.filter { it.isNotBlank() }
+        com.example.network.AiOrchestrator.openrouterKeysList = _openrouterApiKeys.value.filter { it.isNotBlank() }
+        com.example.network.AiOrchestrator.openaiKeysList = _openaiApiKeys.value.filter { it.isNotBlank() }
+    }
+
+    fun saveApiKeys(gemini: String, openRouter: String, openAi: String) {
+        val geminiList = listOf(gemini, "", "")
+        val openRouterList = listOf(openRouter, "", "")
+        val openAiList = listOf(openAi, "", "")
+        saveMultiApiKeys(geminiList, openRouterList, openAiList)
+    }
+
+    fun saveMultiApiKeys(gemini: List<String>, openRouter: List<String>, openAi: List<String>) {
+        val prefs = getApplication<Application>().getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
+        val editor = prefs.edit()
+        
+        val gList = (gemini + listOf("", "", "")).take(3)
+        val orList = (openRouter + listOf("", "", "")).take(3)
+        val oaList = (openAi + listOf("", "", "")).take(3)
+
+        for (i in 0..2) {
+            editor.putString("gemini_key_${i+1}", gList[i])
+            editor.putString("openrouter_key_${i+1}", orList[i])
+            editor.putString("openai_key_${i+1}", oaList[i])
+        }
+        editor.putBoolean("keys_initialized", true)
+        editor.apply()
+
+        _geminiApiKeys.value = gList
+        _openrouterApiKeys.value = orList
+        _openaiApiKeys.value = oaList
+
+        _geminiApiKey.value = gList.firstOrNull { it.isNotBlank() } ?: ""
+        _openrouterApiKey.value = orList.firstOrNull { it.isNotBlank() } ?: ""
+        _openaiApiKey.value = oaList.firstOrNull { it.isNotBlank() } ?: ""
+
+        syncOrchestratorKeys()
+
+        viewModelScope.launch {
+            logDao.insertLog(
+                ActivityLogEntity(
+                    username = "مدیر سیستم",
+                    action = "بروزرسانی موفق لیست ۳ گانه کلیدهای زاپاس پشتیبان API در اندروید",
+                    date = getPersianDateNow()
+                )
+            )
+        }
+    }
+
+    private fun getPersianDateNow(): String = "۱۶ خرداد ۱۴۰۵"
 
     val totalCasesCount = caseDao.getAllCases()
         .map { it.size }
@@ -733,7 +864,7 @@ class CitizenViewModel(application: Application) : AndroidViewModel(application)
     private val _notifications = MutableStateFlow(
         listOf(
             "ورود به سامانه با موفقیت انجام شد.",
-            "پرونده جدیدی در سیستم ایجاد نشده است، از جادوگر استفاده کنید.",
+            "پرونده جدیدی در سیستم ایجاد نشده است، از دستیار هوشمند استفاده کنید.",
             "مجموعه قوانین و کتابخانه حقوقی با آخرین بخشنامه‌ها به‌روزرسانی شد."
         )
     )

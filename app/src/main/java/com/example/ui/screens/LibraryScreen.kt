@@ -448,7 +448,7 @@ fun LibraryScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 Text(
-                                    text = "پردازشگر اسناد و OCR بومی مستقل",
+                                    text = "سندخوان نوری و تحلیل متن بومی",
                                     style = Typography.titleLarge,
                                     color = AccentGold,
                                     fontWeight = FontWeight.Bold,

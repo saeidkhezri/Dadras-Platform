@@ -86,7 +86,11 @@ object RetrofitClient {
 
 object GeminiHelper {
     suspend fun askGemini(prompt: String, systemInstruction: String? = null): String = withContext(Dispatchers.IO) {
-        val key = BuildConfig.GEMINI_API_KEY
+        val key = if (com.example.network.AiOrchestrator.adminGeminiKey.isNotBlank()) com.example.network.AiOrchestrator.adminGeminiKey else BuildConfig.GEMINI_API_KEY
+        askGeminiWithKey(prompt, systemInstruction, key)
+    }
+
+    suspend fun askGeminiWithKey(prompt: String, systemInstruction: String? = null, key: String): String = withContext(Dispatchers.IO) {
         if (key.isEmpty() || key == "MY_GEMINI_API_KEY") {
             // در صورتی که کلید در دسترس نباشد از پاسخ شبیه‌سازی‌شده هوشمند استفاده می‌کنیم تا برنامه کاملاً قابل استفاده بماند
             return@withContext getLocalFallback(prompt, systemInstruction)

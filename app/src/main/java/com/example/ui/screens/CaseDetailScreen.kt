@@ -77,7 +77,7 @@ fun CaseDetailScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { operationMsg = "کد رهگیری ملی مستقل به اشتراک گذاشته شد." }) {
+                            IconButton(onClick = { operationMsg = "کد رهگیری ملی پرونده به اشتراک گذاشته شد." }) {
                                 Icon(Icons.Default.Share, contentDescription = "اشتراک‌گذاری", tint = AccentGold)
                             }
                         },
@@ -236,7 +236,7 @@ fun CaseDetailScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         Button(
-                                            onClick = { operationMsg = "سند با امضا مستقل در قالب PDF ذخیره شد." },
+                                            onClick = { operationMsg = "سند با امضای الکترونیکی در قالب PDF ذخیره شد." },
                                             colors = ButtonDefaults.buttonColors(containerColor = SlateNavyMedium),
                                             modifier = Modifier.weight(1f)
                                         ) {

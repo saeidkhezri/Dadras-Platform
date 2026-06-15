@@ -89,7 +89,7 @@ fun RequestWizardScreen(
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            text = "جادوگر تنظیم اسناد قضایی (۸ گام)",
+                            text = "دستیار هوشمند تنظیم اسناد دادرس (۸ گام)",
                             style = Typography.titleLarge,
                             color = AccentGold,
                             fontWeight = FontWeight.Bold
@@ -482,7 +482,7 @@ fun RequestWizardScreen(
 
                             5 -> {
                                 Text(
-                                    text = "گام پنجم: خواسته یا نتیجه مورد نظر خود را بنویسید (relief)",
+                                    text = "گام پنجم: خواسته یا نتیجه مورد نظر خود را بنویسید",
                                     style = Typography.titleLarge,
                                     color = onBgColor,
                                     fontWeight = FontWeight.Bold,
@@ -491,7 +491,7 @@ fun RequestWizardScreen(
                                 )
 
                                 Text(
-                                    text = "خواسته‌ها یا نتایجی را که مایلید قاضی بر اساس آن طرف مقابل را محکوم کند وارد نمایید. مثلاً: بازپس‌گیری اصل پول به انضمام کلیه خسارت‌های قانونی تادیه، هزینه واخواست و دادرسی.",
+                                    text = "خواسته‌ها یا نتایجی را که مایلید مقام قضایی بر اساس آن طرف مقابل را محکوم کند وارد نمایید. مثلاً: بازپس‌گیری اصل پول به انضمام کلیه خسارت‌های قانونی تادیه، هزینه واخواست و دادرسی.",
                                     style = Typography.bodyMedium,
                                     color = onSurfaceColor,
                                     textAlign = TextAlign.Right,
@@ -692,7 +692,7 @@ fun RequestWizardScreen(
                                                     textAlign = TextAlign.Right
                                                 )
                                                 Text(
-                                                    text = "۳. قدمهای حضوری دادگاه: پرونده ابتدا به شورای حل اختلاف یا دادسرا ارجاع شده و قاضی برای خوانده صادر ابلاغیه می‌کند. در صورت عدم حضور، دادگاه غیابی تشکیل می‌شود.",
+                                                    text = "۳. قدمهای حضوری دادگاه: پرونده ابتدا به شورای حل اختلاف یا دادسرا ارجاع شده و مقام قضایی برای خوانده صادر ابلاغیه می‌کند. در صورت عدم حضور، دادگاه غیابی تشکیل می‌شود.",
                                                     style = Typography.bodyMedium,
                                                     color = onBgColor,
                                                     textAlign = TextAlign.Right
@@ -707,7 +707,7 @@ fun RequestWizardScreen(
                                             }
                                         } else {
                                             Text(
-                                                text = "اکنون در حال مشاهده لایحه تفصیلی و رسمی قوه قضاییه (مخصوص ارایه به قاضی) هستید. جهت درک عمومی، سوئیچ بالا را فعال کنید.",
+                                                text = "اکنون در حال مشاهده لایحه تفصیلی و رسمی قوه قضاییه (مخصوص ارایه به مقام قضایی) هستید. جهت درک عمومی، سوئیچ بالا را فعال کنید.",
                                                 style = Typography.bodySmall,
                                                 color = onSurfaceColor,
                                                 textAlign = TextAlign.Right
@@ -748,7 +748,7 @@ fun RequestWizardScreen(
 
                                         if (showDebateMode) {
                                             Text(
-                                                text = "یک شبیه‌سازی واقعی از جلسه دفاع حضوری دادسرا بین وکلای طرفین و قاضی ناظر:",
+                                                text = "یک شبیه‌سازی واقعی از جلسه دفاع حضوری دادسرا بین وکلای طرفین و مقام قضایی ناظر",
                                                 style = Typography.bodySmall,
                                                 color = onSurfaceColor,
                                                 textAlign = TextAlign.Right
@@ -764,7 +764,7 @@ fun RequestWizardScreen(
                                                         kotlinx.coroutines.delay(1800)
                                                         debateLog = debateLog + ("وکیل مشتکی‌عنه (خوانده)" to "اعتراض دارم! ارایه تراکنش نقدی به تنهایی اثبات‌کننده تعهد کتبی قرارداد نیست و ممکن است موکل واریزی بابت بدهی دیگری انجام داده باشد.")
                                                         kotlinx.coroutines.delay(1800)
-                                                        debateLog = debateLog + ("تحلیل مستند قاضی ناظر" to "صدور رای: مستند به اصل عدم تبرع در حقوق ایران و عدم ارایه مدرکی از سوی خوانده بر طلب پیشین، پرداخت وجه گویای تعهد فی‌مابین است. اعتراض خوانده رد می‌گردد.")
+                                                        debateLog = debateLog + ("تحلیل مستند مقام قضایی ناظر" to "صدور رای: مستند به اصل عدم تبرع در حقوق ایران و عدم ارایه مدرکی از سوی خوانده بر طلب پیشین، پرداخت وجه گویای تعهد فی‌مابین است. اعتراض خوانده رد می‌گردد.")
                                                         isDebating = false
                                                     }
                                                 },
@@ -787,7 +787,7 @@ fun RequestWizardScreen(
                                             ) {
                                                 if (debateLog.isEmpty()) {
                                                     Text(
-                                                        text = "منتظر فرمان دادرسی... دکمه آغاز را فشار دهید تا استدلال‌های وکیل شاکی، وکیل متهم و قاضی را زنده بازخوانی کنید.",
+                                                        text = "منتظر فرمان دادرسی... دکمه آغاز را فشار دهید تا استدلال‌های وکیل شاکی، وکیل متهم و مقام قضایی را زنده بازخوانی کنید.",
                                                         color = onSurfaceColor,
                                                         style = Typography.bodySmall,
                                                         textAlign = TextAlign.Center,
@@ -908,7 +908,7 @@ fun RequestWizardScreen(
                             8 -> {
                                 // GĀM 8: Final Official Document Export + Download Setup + Local Database Save
                                 Text(
-                                    text = "گام هشتم: بارگیری رسمی و ثبت نهایی در مراجع دادرسی مستقل",
+                                    text = "گام هشتم: دریافت فایل نهایی و ثبت در کارتابل ملی",
                                     style = Typography.titleLarge,
                                     color = onBgColor,
                                     fontWeight = FontWeight.Bold,
@@ -953,11 +953,11 @@ fun RequestWizardScreen(
                                         }
 
                                         Button(
-                                            onClick = { operationResultMsg = "سند متنی Word (DOCX) با موفقیت در پوشه مراجع شما ذخیره شد." },
+                                            onClick = { operationResultMsg = "سند متنی ورد با موفقیت در پوشه مراجع شما ذخیره شد." },
                                             colors = ButtonDefaults.buttonColors(containerColor = SlateNavyMedium),
                                             modifier = Modifier.weight(1f)
                                         ) {
-                                            Text("DOCX Word", style = Typography.labelMedium, color = AccentGold)
+                                            Text("دانلود نسخه ورد", style = Typography.labelMedium, color = AccentGold)
                                         }
 
                                         Button(

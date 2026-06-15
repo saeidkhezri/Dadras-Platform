@@ -59,7 +59,7 @@ class MainActivity : ComponentActivity() {
                         ) {
                             // ۱. صفحه ورود کاربران
                             composable("login") {
-                                currentScreenName = "صفحه ورود مستقل"
+                                currentScreenName = "صفحه ورود"
                                 LoginScreen(
                                     authViewModel = authViewModel,
                                     onLoginSuccess = {
@@ -77,9 +77,9 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // ۲. پیشخوان شهروند معمولی
+                            // ۲. پیشخوان کاربر عادی
                             composable("dashboard") {
-                                currentScreenName = "میز خدمت شهروندی"
+                                currentScreenName = "میز خدمت کاربران عادی"
                                 CitizenDashboardScreen(
                                     authViewModel = authViewModel,
                                     citizenViewModel = citizenViewModel,
@@ -89,9 +89,9 @@ class MainActivity : ComponentActivity() {
                                 )
                             }
 
-                            // ۳. جادوگر مولی استپ ۷ مرحله‌ای
+                            // ۳. دستیار هوشمند تنظیم اسناد دادرس
                             composable("wizard") {
-                                currentScreenName = "جادوگر تنظیم اسناد قضایی"
+                                currentScreenName = "دستیار هوشمند تنظیم اسناد دادرس"
                                 RequestWizardScreen(
                                     authViewModel = authViewModel,
                                     citizenViewModel = citizenViewModel,
@@ -125,7 +125,7 @@ class MainActivity : ComponentActivity() {
 
                             // ۶. پیشخوان مدیر سیستم (ادمین پنل)
                             composable("admin_panel") {
-                                currentScreenName = "پنل فوق امنیتی مدیریت"
+                                currentScreenName = "پنل مدیریت سیستم"
                                 AdminPanelScreen(
                                     authViewModel = authViewModel,
                                     adminViewModel = adminViewModel,
@@ -144,10 +144,12 @@ class MainActivity : ComponentActivity() {
                         }
 
                         // همیار هوشمند شناور (تراز با تمام صفحات)
-                        CopilotOverlay(
-                            copilotViewModel = copilotViewModel,
-                            currentScreenName = currentScreenName
-                        )
+                        if (session != null) {
+                            CopilotOverlay(
+                                copilotViewModel = copilotViewModel,
+                                currentScreenName = currentScreenName
+                            )
+                        }
                     }
                 }
             }

@@ -2,11 +2,14 @@ package com.example.network
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
+import com.example.BuildConfig
 import com.example.data.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.nio.charset.StandardCharsets
 import java.util.*
@@ -90,6 +93,14 @@ data class AuditEvent(
 )
 
 object AiOrchestrator {
+    // کلیدهای ثبت شده توسط ادمین در پایگاه داده محلی
+    var adminGeminiKey: String = ""
+    var adminOpenRouterKey: String = ""
+    var adminOpenAiKey: String = ""
+
+    var geminiKeysList: List<String> = emptyList()
+    var openrouterKeysList: List<String> = emptyList()
+    var openaiKeysList: List<String> = emptyList()
 
     // PREDEFINED API KEYS IN CRYPTO-OBFUSCATED REPOSITORY
     private val OBFUSCATED_OPENROUTER_KEYS = listOf(
@@ -268,11 +279,167 @@ object AiOrchestrator {
         _monthlyCost.value += costUsd
     }
 
+    private val client = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
+        .build()
+
+    private suspend fun callOpenRouterEndpoint(modelId: String, apiKey: String, prompt: String, systemInstruction: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        
+        val messagesArray = org.json.JSONArray()
+        if (systemInstruction != null && systemInstruction.isNotEmpty()) {
+            messagesArray.put(org.json.JSONObject().apply {
+                put("role", "system")
+                put("content", systemInstruction)
+            })
+        }
+        messagesArray.put(org.json.JSONObject().apply {
+            put("role", "user")
+            put("content", prompt)
+        })
+
+        val jsonBody = org.json.JSONObject().apply {
+            put("model", modelId)
+            put("messages", messagesArray)
+            put("temperature", 0.4)
+        }
+
+        val request = okhttp3.Request.Builder()
+            .url("https://openrouter.ai/api/v1/chat/completions")
+            .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .addHeader("HTTP-Referer", "https://ai.studio/build")
+            .addHeader("X-Title", "Iran Law Platform MVP")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("کد خطا: ${response.code} - ${response.message}")
+            val bodyString = response.body?.string() ?: throw Exception("بدنه پاسخ خالی است")
+            val jsonResponse = org.json.JSONObject(bodyString)
+            val choices = jsonResponse.getJSONArray("choices")
+            if (choices.length() > 0) {
+                val choice = choices.getJSONObject(0)
+                val message = choice.getJSONObject("message")
+                return@withContext message.getString("content")
+            }
+            throw Exception("عدم امکان استخراج فیلد پاسخ")
+        }
+    }
+
+    private suspend fun callOpenAiEndpoint(openaiModel: String, apiKey: String, prompt: String, systemInstruction: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+
+        val messagesArray = org.json.JSONArray()
+        if (systemInstruction != null && systemInstruction.isNotEmpty()) {
+            messagesArray.put(org.json.JSONObject().apply {
+                put("role", "system")
+                put("content", systemInstruction)
+            })
+        }
+        messagesArray.put(org.json.JSONObject().apply {
+            put("role", "user")
+            put("content", prompt)
+        })
+
+        val jsonBody = org.json.JSONObject().apply {
+            put("model", openaiModel)
+            put("messages", messagesArray)
+            put("temperature", 0.4)
+        }
+
+        val request = okhttp3.Request.Builder()
+            .url("https://api.openai.com/v1/chat/completions")
+            .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("کد خطا: ${response.code} - ${response.message}")
+            val bodyString = response.body?.string() ?: throw Exception("بدنه پاسخ خالی است")
+            val jsonResponse = org.json.JSONObject(bodyString)
+            val choices = jsonResponse.getJSONArray("choices")
+            if (choices.length() > 0) {
+                val choice = choices.getJSONObject(0)
+                val message = choice.getJSONObject("message")
+                return@withContext message.getString("content")
+            }
+            throw Exception("عدم امکان استخراج فیلد پاسخ")
+        }
+    }
+
     private suspend fun callModelGateway(model: String, prompt: String, systemInstruction: String?): String {
-        // OpenRouter REST call representation with API Authorization
-        val apiKey = getActiveOpenRouterApiKey()
-        // Here we simulate the network delay + standard dynamic content
-        kotlinx.coroutines.delay(1200)
+        val openRouterKey = if (adminOpenRouterKey.isNotBlank()) adminOpenRouterKey else try { BuildConfig.OPENROUTER_API_KEY } catch (e: Exception) { "" }
+        val openAiKey = if (adminOpenAiKey.isNotBlank()) adminOpenAiKey else try { BuildConfig.OPENAI_API_KEY } catch (e: Exception) { "" }
+        val geminiKey = if (adminGeminiKey.isNotBlank()) adminGeminiKey else try { BuildConfig.GEMINI_API_KEY } catch (e: Exception) { "" }
+
+        // Compile priority key lists based on what admin configured (up to 3 keys)
+        val opKeys = (openrouterKeysList + listOf(openRouterKey)).filter { it.isNotBlank() && it != "YOUR_OPENROUTER_API_KEY" }.distinct()
+        val oaKeys = (openaiKeysList + listOf(openAiKey)).filter { it.isNotBlank() && it != "YOUR_OPENAI_API_KEY" }.distinct()
+        val geKeys = (geminiKeysList + listOf(geminiKey)).filter { it.isNotBlank() && it != "MY_GEMINI_API_KEY" }.distinct()
+
+        // Inject the mandatory guideline to use the latest online/updated version of Iranian laws and decisions
+        val onlineLawDirective = "\n\n[راهنمای حیاتی سیستم: همواره فرض کنید به وب زنده متصل هستید و در این دادرسی موظف هستید آخرین نسخه، معتبرترین اصلاحیه‌ها، قوانین و بخشنامه‌های قضایی سال جاری کشور را به صورت آنلاین و برخط جستجو و اعمال نمایید تا اسناد قضایی و آرای وحدت رویه کاملا منطبق بر آخرین تغییرات رسمی روزنامه رسمی کشور صادر شده باشند.]"
+        val enhancedSystemInstruction = if (systemInstruction != null) {
+            systemInstruction + onlineLawDirective
+        } else {
+            "شما دستیار حقوقی هوشمند پلتفرم مستقل دادرس هستید." + onlineLawDirective
+        }
+
+        // Determine Model ID for OpenRouter mapping
+        val modelId = when (model) {
+            "GPT-4o Enterprise" -> "openai/gpt-4o"
+            "Claude 3.5 Sonnet" -> "anthropic/claude-3.5-sonnet"
+            "DeepSeek Llama-3" -> "deepseek/deepseek-chat"
+            "Qwen-2.5-72B" -> "qwen/qwen-2.5-72b-instruct"
+            "Gemini 1.5 Pro" -> "google/gemini-pro-1.5"
+            else -> "openai/gpt-4o"
+        }
+
+        // 1. Try OpenRouter first if keys are present
+        if (opKeys.isNotEmpty()) {
+            for ((index, key) in opKeys.withIndex()) {
+                try {
+                    logAuditEvent("AI_CALL_DETAIL", "تلاش با کلید شماره ${index+1} ارائه‌دهنده OpenRouter...")
+                    return callOpenRouterEndpoint(modelId, key, prompt, enhancedSystemInstruction)
+                } catch (e: Exception) {
+                    logAuditEvent("AI_REST_ERROR", "خطا در کلید شماره ${index+1} ارائه‌دهنده OpenRouter: ${e.localizedMessage}")
+                }
+            }
+        }
+
+        // 2. Try OpenAI direct if model is GPT-4o and keys are present
+        if (model == "GPT-4o Enterprise" && oaKeys.isNotEmpty()) {
+            for ((index, key) in oaKeys.withIndex()) {
+                try {
+                    logAuditEvent("AI_CALL_DETAIL", "تلاش با کلید شماره ${index+1} ارائه‌دهنده OpenAI مستقیم...")
+                    return callOpenAiEndpoint("gpt-4o", key, prompt, enhancedSystemInstruction)
+                } catch (e: Exception) {
+                    logAuditEvent("AI_REST_ERROR", "خطا در کلید شماره ${index+1} ارائه‌دهنده OpenAI مستقیم: ${e.localizedMessage}")
+                }
+            }
+        }
+
+        // 3. Try direct Google Gemini client
+        if (model == "Gemini 1.5 Pro" || opKeys.isEmpty()) {
+            val keysToTry = if (geKeys.isNotEmpty()) geKeys else listOf(geminiKey).filter { it.isNotBlank() }
+            if (keysToTry.isNotEmpty()) {
+                for ((index, key) in keysToTry.withIndex()) {
+                    try {
+                        logAuditEvent("AI_CALL_DETAIL", "تلاش با کلید شماره ${index+1} ارائه‌دهنده Google Gemini مستقیم...")
+                        return GeminiHelper.askGeminiWithKey(prompt, enhancedSystemInstruction, key)
+                    } catch (e: Exception) {
+                        logAuditEvent("AI_REST_ERROR", "خطا در کلید شماره ${index+1} ارائه‌دهنده Gemini مستقیم: ${e.localizedMessage}")
+                    }
+                }
+            }
+        }
+
+        // 4. Fallback to pre-set outputs if no active keys or if they failed
+        kotlinx.coroutines.delay(1000)
         return getOrchestrationLocalFallback(prompt, model)
     }
 

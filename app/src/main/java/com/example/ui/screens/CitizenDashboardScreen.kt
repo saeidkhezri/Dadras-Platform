@@ -86,7 +86,7 @@ fun CitizenDashboardScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "پیشخوان کاربری مستقل",
+                                text = "میز خدمت کاربران عادی",
                                 style = Typography.titleMedium,
                                 color = AccentGold,
                                 fontWeight = FontWeight.Bold
@@ -98,13 +98,13 @@ fun CitizenDashboardScreen(
                         Divider(color = glassBorderColor, modifier = Modifier.padding(bottom = 8.dp))
 
                         val sidebarTabs = listOf(
-                            Triple("dashboard", "میز کاربری", Icons.Default.Home),
-                            Triple("cases", "کارتابل عریض پرونده", Icons.Default.Menu),
-                            Triple("research", "تحقیق و جستجوی RAG", Icons.Default.Search),
-                            Triple("timeline", "خط زمانی قضایی", Icons.Default.Build),
-                            Triple("notifications", "اعلان‌های امنیتی", Icons.Default.Notifications),
-                            Triple("profile", "امضاء و پروفایل", Icons.Default.Person),
-                            Triple("settings", "دستگاه و تنظیمات", Icons.Default.Settings)
+                            Triple("dashboard", "صفحه نخست", Icons.Default.Home),
+                            Triple("cases", "لیست پرونده‌ها", Icons.Default.Menu),
+                            Triple("research", "جستجوی مراجع قانونی", Icons.Default.Search),
+                            Triple("timeline", "مراحل رسیدگی", Icons.Default.Build),
+                            Triple("notifications", "صندوق پیام‌ها", Icons.Default.Notifications),
+                            Triple("profile", "پروفایل کاربری", Icons.Default.Person),
+                            Triple("settings", "تنظیمات برنامه", Icons.Default.Settings)
                         )
 
                         sidebarTabs.forEach { (tabId, label, icon) ->
@@ -193,7 +193,7 @@ fun CitizenDashboardScreen(
                                         .padding(horizontal = 12.dp, vertical = 6.dp)
                                 ) {
                                     Text(
-                                        text = session?.username ?: "شهروند",
+                                        text = session?.username ?: "کاربر عادی",
                                         style = Typography.labelMedium,
                                         color = AccentGold,
                                         fontWeight = FontWeight.Bold
@@ -240,20 +240,7 @@ fun CitizenDashboardScreen(
                             }
                         }
                     },
-                    floatingActionButton = {
-                        if (!isWideScreen) {
-                            ExtendedFloatingActionButton(
-                                onClick = onNavigateToWizard,
-                                containerColor = AccentGold,
-                                contentColor = Color.Black,
-                                icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                                text = { Text("درخواست حقوقی جدید", style = Typography.titleMedium, fontWeight = FontWeight.Bold) },
-                                modifier = Modifier
-                                    .testTag("new_request_fab")
-                                    .padding(bottom = 16.dp)
-                            )
-                        }
-                    },
+                    floatingActionButton = {},
                     floatingActionButtonPosition = FabPosition.Center
                 ) { innerPadding ->
                     Box(
@@ -279,6 +266,17 @@ fun CitizenDashboardScreen(
                                         textAlign = TextAlign.Right,
                                         modifier = Modifier.fillMaxWidth()
                                     )
+
+                                    if (!isWideScreen) {
+                                        CollapsibleNewRequestTab(
+                                            isDark = isDark,
+                                            surfaceColor = surfaceColor,
+                                            glassBorderColor = glassBorderColor,
+                                            onBgColor = onBgColor,
+                                            onSurfaceColor = onSurfaceColor,
+                                            onNavigateToWizard = onNavigateToWizard
+                                        )
+                                    }
 
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
@@ -318,10 +316,10 @@ fun CitizenDashboardScreen(
                                             horizontalAlignment = Alignment.End,
                                             verticalArrangement = Arrangement.spacedBy(8.dp)
                                         ) {
-                                            Text("راهنمای سامانه مستقل دادرس هوشمند", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            Text("راهنمای سامانه دادرس هوشمند", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
                                             Divider(color = glassBorderColor)
                                             Text(
-                                                text = "این پلتفرم برای کمک به شهروندان و تنظیم دادخواست‌های منطبق بر موازین قضایی جمهوری اسلامی ایران به وسیله هوش مصنوعی طراحی شده است. از میان‌برهای زیر استفاده کنید غوطه ور در جلوه شیشه‌ای Liquid Glass.",
+                                                text = "این پلتفرم برای کمک به کاربران عادی و تنظیم دادخواست‌های منطبق بر موازین قضایی جمهوری اسلامی ایران به وسیله هوش مصنوعی طراحی شده است. از میان‌برهای زیر استفاده کنید غوطه ور در جلوه شیشه‌ای Liquid Glass.",
                                                 style = Typography.bodyMedium,
                                                 color = onSurfaceColor,
                                                 textAlign = TextAlign.Right
@@ -374,13 +372,25 @@ fun CitizenDashboardScreen(
                                         .padding(16.dp)
                                 ) {
                                     Text(
-                                        text = "کارتابل پرونده‌های شهروند",
+                                        text = "کارتابل پرونده‌های کاربر عادی",
                                         style = Typography.headlineMedium,
                                         color = onBgColor,
                                         fontWeight = FontWeight.Bold,
                                         modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
                                         textAlign = TextAlign.Right
                                     )
+
+                                    if (!isWideScreen) {
+                                        CollapsibleNewRequestTab(
+                                            isDark = isDark,
+                                            surfaceColor = surfaceColor,
+                                            glassBorderColor = glassBorderColor,
+                                            onBgColor = onBgColor,
+                                            onSurfaceColor = onSurfaceColor,
+                                            onNavigateToWizard = onNavigateToWizard
+                                        )
+                                        Spacer(modifier = Modifier.height(12.dp))
+                                    }
 
                                     OutlinedTextField(
                                         value = searchQuery,
@@ -411,7 +421,7 @@ fun CitizenDashboardScreen(
                                                 CaseCardItem(
                                                     case = case,
                                                     onClick = { onNavigateToCase(case.id) },
-                                                    onDelete = { citizenViewModel.deleteCase(case.id, session?.username ?: "شهروند") }
+                                                    onDelete = { citizenViewModel.deleteCase(case.id, session?.username ?: "کاربر عادی") }
                                                 )
                                             }
                                         }
@@ -433,12 +443,23 @@ fun CitizenDashboardScreen(
                                     horizontalAlignment = Alignment.End
                                 ) {
                                     Text(
-                                        text = "تحقیق حقوقی چندمدلی با RAG مستقل",
+                                        text = "بخش جستجو و تحقیق قوانین ملی",
                                         style = Typography.headlineMedium,
                                         color = onBgColor,
                                         fontWeight = FontWeight.Bold,
                                         textAlign = TextAlign.Right
                                     )
+
+                                    if (!isWideScreen) {
+                                        CollapsibleNewRequestTab(
+                                            isDark = isDark,
+                                            surfaceColor = surfaceColor,
+                                            glassBorderColor = glassBorderColor,
+                                            onBgColor = onBgColor,
+                                            onSurfaceColor = onSurfaceColor,
+                                            onNavigateToWizard = onNavigateToWizard
+                                        )
+                                    }
                                     Text(
                                         text = "جستجوی واژه‌محور و برداری (Hybrid Search) در آرشیو آرای وحدت رویه و قوانین ملی:",
                                         style = Typography.bodyMedium,
@@ -519,8 +540,8 @@ fun CitizenDashboardScreen(
 
                                     val timelineEvents = listOf(
                                         Triple("گام اول: تنظیم مدارک", "ثبت شرح واقعه و ارایه شواهد اولیه", "۱۶ خرداد ۱۴۰۵"),
-                                        Triple("گام دوم: تحلیل و امضای RAG", "سنجش درصد موفقیت و ثبت مستقل هوشمند", "۱۷ خرداد ۱۴۰۵"),
-                                        Triple("گام سوم: ابلاغیه الکترونیک", "ارسال خودکار دادخواست به سامانه ابلاغ مستقل", "۱۹ خرداد ۱۴۰۵"),
+                                        Triple("گام دوم: تحلیل و امضای اسناد", "سنجش درصد موفقیت و تایید هوشمند لایحه", "۱۷ خرداد ۱۴۰۵"),
+                                        Triple("گام سوم: ابلاغیه الکترونیک", "ارسال خودکار دادخواست به سامانه رسمی ابلاغ", "۱۹ خرداد ۱۴۰۵"),
                                         Triple("گام چهارم: شورای حل اختلاف", "تلاش برای صلح موضوع بر اساس کدهای تسبیب", "به زودی")
                                     )
 
@@ -551,7 +572,7 @@ fun CitizenDashboardScreen(
                                         .padding(16.dp)
                                 ) {
                                     Text(
-                                        text = "صندوق پستی و اعلانات امنیتی",
+                                        text = "صندوق پستی و اعلانات ورودی",
                                         style = Typography.headlineMedium,
                                         color = onBgColor,
                                         fontWeight = FontWeight.Bold,
@@ -620,15 +641,15 @@ fun CitizenDashboardScreen(
                                         Icon(Icons.Default.Person, contentDescription = null, tint = AccentGold, modifier = Modifier.size(40.dp))
                                     }
 
-                                    Text(session?.username ?: "شهروند گرامی", style = Typography.titleLarge, color = onBgColor, fontWeight = FontWeight.Bold)
-                                    Text("شناسه مستقل: ۲۸۱۸۲۷۱۲۳۸ | وضعیت تایید: نقره‌ای", style = Typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
+                                    Text(session?.username ?: "کاربر گرامی", style = Typography.titleLarge, color = onBgColor, fontWeight = FontWeight.Bold)
+                                    Text("شناسه کاربری: ۲۸۱۸۲۷۱۲۳۸ | وضعیت تایید: نقره‌ای", style = Typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
 
                                     Card(
                                         modifier = Modifier.fillMaxWidth().border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
                                         colors = CardDefaults.cardColors(containerColor = surfaceColor)
                                     ) {
                                         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            ProfileRow("محدوده آدرس ملی الکترونیکی", "سامانه مستقل دادرسی")
+                                            ProfileRow("محدوده آدرس ملی الکترونیکی", "سامانه دادرسی رسمی")
                                             ProfileRow("اعتبار گواهی تا تاریخ", "۱۴۰۶/۱۲/۲۹")
                                             ProfileRow("سهمیه امبدینگ RAG فضا", "باقیمانده ۹۸ درخواست")
                                             ProfileRow("کارت هوشمند امضاء الکترونیک", "فعال و ثبت شده")
@@ -641,7 +662,7 @@ fun CitizenDashboardScreen(
                                         modifier = Modifier.fillMaxWidth().height(48.dp),
                                         shape = RoundedCornerShape(12.dp)
                                     ) {
-                                        Text("خروج امن از سیستم ملی مستقل", color = Color.White, fontWeight = FontWeight.Bold)
+                                        Text("خروج امن از حساب کاربری", color = Color.White, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -769,3 +790,104 @@ fun ProfileRow(title: String, valText: String) {
         Text(text = title, style = Typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
+
+@Composable
+fun CollapsibleNewRequestTab(
+    isDark: Boolean,
+    surfaceColor: Color,
+    glassBorderColor: Color,
+    onBgColor: Color,
+    onSurfaceColor: Color,
+    onNavigateToWizard: () -> Unit
+) {
+    var isExpanded by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
+            .clickable { isExpanded = !isExpanded },
+        colors = CardDefaults.cardColors(containerColor = if (isExpanded) surfaceColor else surfaceColor.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                    contentDescription = null,
+                    tint = AccentGold,
+                    modifier = Modifier.size(24.dp)
+                )
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(
+                        text = if (isExpanded) "بستن پنل دسترسی لایحه" else "درخواست حقوقی جدید +",
+                        style = Typography.titleMedium,
+                        color = AccentGold,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = null,
+                        tint = AccentGold,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            AnimatedVisibility(
+                visible = isExpanded,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 8.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Divider(color = glassBorderColor.copy(alpha = 0.5f))
+                    Text(
+                        text = "دستیار صادرکننده لایحه دادرس ملی آماده هدایت پرونده، دادخواست، شکواییه یا اظهارنامه قضایی به صورت تمام خودکار و هوشمند است.",
+                        style = Typography.bodySmall,
+                        color = onSurfaceColor,
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Button(
+                        onClick = onNavigateToWizard,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(44.dp)
+                    ) {
+                        Text(
+                            text = "شروع تنظیم و نگارش سند جدید در دستیار",
+                            style = Typography.bodyMedium,
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+                    }
+                }
+            }
+        }
+    }
+}
+

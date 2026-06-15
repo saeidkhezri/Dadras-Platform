@@ -1,5 +1,12 @@
 package com.example.ui.screens
 
+import android.net.Uri
+import android.content.Context
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -46,6 +53,64 @@ data class SimulatedUploadFile(
     var chunksCount: Int = 0,
     var logs: List<String> = emptyList()
 )
+
+// Helper functions to get accurate file information from Uri
+private fun getFileName(context: Context, uri: Uri): String? {
+    var result: String? = null
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        try {
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index != -1) {
+                    result = cursor.getString(index)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            cursor?.close()
+        }
+    }
+    if (result == null) {
+        result = uri.path
+        val cut = result?.lastIndexOf('/')
+        if (cut != null && cut != -1) {
+            result = result?.substring(cut + 1)
+        }
+    }
+    return result
+}
+
+private fun getFileSize(context: Context, uri: Uri): String? {
+    var size: Long = 0
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        try {
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (index != -1) {
+                    size = cursor.getLong(index)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        } finally {
+            cursor?.close()
+        }
+    }
+    if (size <= 0) return "۱.۵ مگابایت"
+    val sizeInMb = size.toDouble() / (1024 * 1024)
+    return "${sizeInMb.toString().take(4)} مگابایت"
+}
+
+private fun getFileExtension(fileName: String): String? {
+    val lastDot = fileName.lastIndexOf('.')
+    if (lastDot != -1 && lastDot < fileName.length - 1) {
+        return fileName.substring(lastDot + 1).uppercase()
+    }
+    return null
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,12 +167,30 @@ fun AdminPanelScreen(
     var isComparing by remember { mutableStateOf(false) }
 
     // مرکز بارگذاری اسناد و محاسبات RAG
+    val pickerContext = LocalContext.current
     var uploadCategory by remember { mutableStateOf("قوانین (Laws)") }
     var uploadFileFormat by remember { mutableStateOf("PDF") }
     var uploadSourceUrl by remember { mutableStateOf("") }
     var uploadVersion by remember { mutableStateOf("۱.۰") }
     var uploadMetadataTags by remember { mutableStateOf("") }
     var uploadQueue by remember { mutableStateOf(listOf<SimulatedUploadFile>()) }
+
+    val selectFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            val fileName = getFileName(pickerContext, uri) ?: "سند_حقوقی_منتخب"
+            val sizeStr = getFileSize(pickerContext, uri) ?: "۱.۲ مگابایت"
+            val detectedFormat = getFileExtension(fileName) ?: uploadFileFormat
+            
+            uploadQueue = uploadQueue + SimulatedUploadFile(
+                name = fileName,
+                size = sizeStr,
+                format = detectedFormat,
+                status = "در صف پردازش"
+            )
+        }
+    }
     var isProcessingRAG by remember { mutableStateOf(false) }
     var activeProcessingIndex by remember { mutableStateOf(-1) }
     var hasProcessedSuccessfully by remember { mutableStateOf(false) }
@@ -119,7 +202,7 @@ fun AdminPanelScreen(
                 CenterAlignedTopAppBar(
                     title = {
                         Text(
-                            text = "پیشخوان فوقِ امنیتی ادمین مستقل (رسمی)",
+                            text = "پیشخوان مدیریت کل سامانه",
                             style = Typography.titleLarge,
                             color = AccentGold,
                             fontWeight = FontWeight.Bold
@@ -142,7 +225,7 @@ fun AdminPanelScreen(
                         selected = activeSubSection == "settings",
                         onClick = { activeSubSection = "settings" },
                         icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                        label = { Text("تنظیمات", style = Typography.labelSmall) },
+                        label = { Text("تنظیمات سیستم", style = Typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium)
                     )
 
@@ -150,7 +233,7 @@ fun AdminPanelScreen(
                         selected = activeSubSection == "resources",
                         onClick = { activeSubSection = "resources" },
                         icon = { Icon(Icons.Default.Info, contentDescription = null) },
-                        label = { Text("منابع و مراجع", style = Typography.labelSmall) },
+                        label = { Text("منابع قوانین", style = Typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium)
                     )
 
@@ -158,7 +241,7 @@ fun AdminPanelScreen(
                         selected = activeSubSection == "uploads",
                         onClick = { activeSubSection = "uploads" },
                         icon = { Icon(Icons.Default.Share, contentDescription = null) },
-                        label = { Text("مرکز آپلود اسناد", style = Typography.labelSmall) },
+                        label = { Text("بارگذاری اسناد", style = Typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium)
                     )
 
@@ -166,7 +249,7 @@ fun AdminPanelScreen(
                         selected = activeSubSection == "logs",
                         onClick = { activeSubSection = "logs" },
                         icon = { Icon(Icons.Default.Menu, contentDescription = null) },
-                        label = { Text("بازرسی و لاگ‌ها", style = Typography.labelSmall) },
+                        label = { Text("لیست اقدامات", style = Typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium)
                     )
 
@@ -174,7 +257,7 @@ fun AdminPanelScreen(
                         selected = activeSubSection == "dashboard",
                         onClick = { activeSubSection = "dashboard" },
                         icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                        label = { Text("میز ادمین", style = Typography.labelSmall) },
+                        label = { Text("آمار و عملکرد", style = Typography.labelSmall) },
                         colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium)
                     )
                 }
@@ -196,7 +279,7 @@ fun AdminPanelScreen(
                             horizontalAlignment = Alignment.End
                         ) {
                             Text(
-                                text = "آمار و ریزعملکرد کل دادرس هوشمند مستقل",
+                                text = "آمار و خلاصه عملکرد کل سامانه",
                                 style = Typography.headlineMedium,
                                 color = TextPrimaryFarsi,
                                 fontWeight = FontWeight.Bold
@@ -790,14 +873,14 @@ fun AdminPanelScreen(
                             horizontalAlignment = Alignment.End
                         ) {
                             Text(
-                                text = "مرکز فوق‌امنیتی بارگذاری و ذخیره‌سازی اسناد RAG",
+                                text = "بخش بارگذاری و ثبت فایل‌ها و اسناد",
                                 style = Typography.headlineMedium,
                                 color = AccentGold,
                                 fontWeight = FontWeight.Bold,
                                 textAlign = TextAlign.Right
                             )
                             Text(
-                                text = "پایگاه بارگذاری مدون مستقل. اسناد ارسالی پیش از ثبت مدل در بانک برداری استخراج، قطعه‌بندی (Chunking)، تولید امبدینگ و در جداول مرتبط ذخیره می‌شوند.",
+                                text = "در این بخش می‌توانید اسناد و قوانین جدید را بارگذاری کنید تا در سامانه جستجو و دادرسی فعال شوند.",
                                 style = Typography.bodyMedium,
                                 color = TextSecondaryFarsi,
                                 textAlign = TextAlign.Right
@@ -806,7 +889,7 @@ fun AdminPanelScreen(
                             Spacer(modifier = Modifier.height(4.dp))
 
                             Text(
-                                text = "بخش بارگذاری هدفمند اسناد حقوقی و آرای تفکیکی مستقل:",
+                                text = "انتخاب اسناد و آرای قضایی برای ثبت در سامانه:",
                                 style = Typography.titleMedium,
                                 color = AccentGold
                             )
@@ -881,21 +964,11 @@ fun AdminPanelScreen(
                                     .fillMaxWidth()
                                     .height(140.dp)
                                     .clickable {
-                                        val selectedDoc = when {
-                                            uploadCategory.contains("Laws") -> "قانون_جدید_بودجه_ملی_کشور_نسخه_۱_۴.pdf"
-                                            uploadCategory.contains("Unification") -> "رای_وحدت_رویه_شماره_۸۳۰_دیوان_عالی.docx"
-                                            uploadCategory.contains("Advisory") -> "نظریه_مشورتی_قوه_قضاییه_جرم_رایانه‌ای.txt"
-                                            uploadCategory.contains("Judicial") -> "دادنامه_بدوی_شعبه_۱۰۲_حقوقی_تهران.pdf"
-                                            uploadCategory.contains("Directives") -> "بخشنامه_قوه_قضاییه_درخصوص_صلح_و_سازش.docx"
-                                            uploadCategory.contains("Regulations") -> "ایین_نامه_اجرایی_ثبت_اسناد_رسمی.html"
-                                            else -> "پژوهش_سیاستگذاری_جرم‌شناسی_حقوق_ایران.csv"
+                                        try {
+                                            selectFileLauncher.launch("*/*")
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
                                         }
-                                        uploadQueue = uploadQueue + SimulatedUploadFile(
-                                            name = selectedDoc,
-                                            size = "${(1.2 + uploadQueue.size * 0.7).toString().take(4)} مگابایت",
-                                            format = uploadFileFormat,
-                                            status = "در صف پردازش"
-                                        )
                                     },
                                 colors = CardDefaults.cardColors(containerColor = GlassSurfaceDark),
                                 shape = RoundedCornerShape(16.dp)
@@ -1082,7 +1155,7 @@ fun AdminPanelScreen(
                                             file.status = "تولید بردار..."
                                             file.logs = file.logs + listOf(
                                                 "🧬 ارسال بخش‌ها به مدل‌سازی برداری مراجع...",
-                                                "🧬 تولید بردار ویژگی و امبدینگ ۱۲۸ بعدی با مدل هوشمند مستقل"
+                                                "🧬 نمایه‌سازی و آماده‌سازی متن با مدل هوشمند هماهنگ"
                                             )
                                             kotlinx.coroutines.delay(1000)
 
@@ -1178,6 +1251,14 @@ fun AdminPanelScreen(
                     }
 
                     "settings" -> {
+                        val curGeminiKeys by adminViewModel.geminiApiKeys.collectAsState()
+                        val curOpenRouterKeys by adminViewModel.openrouterApiKeys.collectAsState()
+                        val curOpenAiKeys by adminViewModel.openaiApiKeys.collectAsState()
+
+                        var tempGeminiKeys by remember(curGeminiKeys) { mutableStateOf(curGeminiKeys.ifEmpty { listOf("", "", "") }) }
+                        var tempOpenRouterKeys by remember(curOpenRouterKeys) { mutableStateOf(curOpenRouterKeys.ifEmpty { listOf("", "", "") }) }
+                        var tempOpenAiKeys by remember(curOpenAiKeys) { mutableStateOf(curOpenAiKeys.ifEmpty { listOf("", "", "") }) }
+
                         Column(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -1305,6 +1386,150 @@ fun AdminPanelScreen(
 
                             Spacer(modifier = Modifier.height(8.dp))
 
+                            // کارت مدیریت کلیدهای امنیتی هوش مصنوعی (API Keys)
+                            Card(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, GlassBorderLight, RoundedCornerShape(12.dp)),
+                                colors = CardDefaults.cardColors(containerColor = GlassSurfaceDark)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(16.dp),
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Text(
+                                        text = "مدیریت کلیدهای امنیتی هوش مصنوعی (API Keys)",
+                                        style = Typography.titleMedium,
+                                        color = AccentGold,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = "جهت پایداری کامل و جلوگیری از اختلال در جلسات ارائه، می‌توانید تا ۳ کلید پشتیبان برای هر ارائه‌دهنده تعریف کنید. سیستم در صورت مسدودی یا اتمام شارژ یک کلید، به طور خودکار به کلیدهای زاپاس بعدی فیل‌اور می‌کند.",
+                                        style = Typography.labelSmall,
+                                        color = TextSecondaryFarsi,
+                                        textAlign = TextAlign.Right
+                                    )
+                                    Divider(color = GlassBorderLight)
+
+                                    // Gemini API Key Inputs
+                                    Text(text = "کلیدهای اختصاصی Google Gemini API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
+                                    for (i in 0..2) {
+                                        val v = tempGeminiKeys.getOrNull(i) ?: ""
+                                        OutlinedTextField(
+                                            value = v,
+                                            onValueChange = { newVal ->
+                                                val updated = tempGeminiKeys.toMutableList()
+                                                while (updated.size <= i) updated.add("")
+                                                updated[i] = newVal
+                                                tempGeminiKeys = updated
+                                            },
+                                            placeholder = { Text("کلید شماره ${i+1} جمینای (مثال: AIzaSy...)", color = TextSecondaryFarsi) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                focusedBorderColor = AccentGold,
+                                                unfocusedBorderColor = GlassBorderLight
+                                            )
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    // OpenRouter API Key Inputs
+                                    Text(text = "کلیدهای اختصاصی OpenRouter API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
+                                    for (i in 0..2) {
+                                        val v = tempOpenRouterKeys.getOrNull(i) ?: ""
+                                        OutlinedTextField(
+                                            value = v,
+                                            onValueChange = { newVal ->
+                                                val updated = tempOpenRouterKeys.toMutableList()
+                                                while (updated.size <= i) updated.add("")
+                                                updated[i] = newVal
+                                                tempOpenRouterKeys = updated
+                                            },
+                                            placeholder = { Text("کلید شماره ${i+1} اپن‌روتر (مثال: sk-or-...)", color = TextSecondaryFarsi) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                focusedBorderColor = AccentGold,
+                                                unfocusedBorderColor = GlassBorderLight
+                                            )
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(6.dp))
+
+                                    // OpenAI API Key Inputs
+                                    Text(text = "کلیدهای اختصاصی OpenAI API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
+                                    for (i in 0..2) {
+                                        val v = tempOpenAiKeys.getOrNull(i) ?: ""
+                                        OutlinedTextField(
+                                            value = v,
+                                            onValueChange = { newVal ->
+                                                val updated = tempOpenAiKeys.toMutableList()
+                                                while (updated.size <= i) updated.add("")
+                                                updated[i] = newVal
+                                                tempOpenAiKeys = updated
+                                            },
+                                            placeholder = { Text("کلید شماره ${i+1} اپن‌ای‌آی (مثال: sk-proj-...)", color = TextSecondaryFarsi) },
+                                            singleLine = true,
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                            shape = RoundedCornerShape(8.dp),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = Color.White,
+                                                unfocusedTextColor = Color.White,
+                                                focusedBorderColor = AccentGold,
+                                                unfocusedBorderColor = GlassBorderLight
+                                            )
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    var showSuccessLabel by remember { mutableStateOf(false) }
+
+                                    Button(
+                                        onClick = {
+                                            adminViewModel.saveMultiApiKeys(
+                                                gemini = tempGeminiKeys,
+                                                openRouter = tempOpenRouterKeys,
+                                                openAi = tempOpenAiKeys
+                                            )
+                                            showSuccessLabel = true
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(
+                                            text = "بروزرسانی و ثبت نهایی چرخه اصلی و پشتیبان کلیدها",
+                                            style = Typography.bodyMedium,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    if (showSuccessLabel) {
+                                        Text(
+                                            text = "تغییرات با موفقیت اعمال و در حافظه محلی ایمن اندروید ثبت نهایی کلیدها انجام شد!",
+                                            color = SoftEmerald,
+                                            style = Typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Right,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
                             // تغییر وضعیت لیمیت نرخ ورودی
                             Row(
                                 modifier = Modifier
@@ -1320,7 +1545,7 @@ fun AdminPanelScreen(
                                     colors = SwitchDefaults.colors(checkedThumbColor = SoftEmerald)
                                 )
                                 Column(horizontalAlignment = Alignment.End) {
-                                    Text(text = "فعال‌سازی نرخ مجاز ترافیک مستقل", style = Typography.bodyLarge, color = TextPrimaryFarsi, fontWeight = FontWeight.Bold)
+                                    Text(text = "محدودیت تعداد درخواست ارسالی روزانه", style = Typography.bodyLarge, color = TextPrimaryFarsi, fontWeight = FontWeight.Bold)
                                     Text(text = "محدود کردن کاربران به ۱۰۰ درخواست ساعتی", style = Typography.labelSmall, color = TextSecondaryFarsi)
                                 }
                             }
@@ -1346,7 +1571,7 @@ fun AdminPanelScreen(
                                 }
 
                                 Text(
-                                    text = "درگاه ثبت وقایع امنیتی و بازرسی (Audit Logs)",
+                                    text = "تاریخچه اقدامات مدیران و کاربران",
                                     style = Typography.headlineMedium,
                                     color = TextPrimaryFarsi,
                                     fontWeight = FontWeight.Bold

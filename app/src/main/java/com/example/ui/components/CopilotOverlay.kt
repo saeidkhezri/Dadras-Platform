@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import androidx.compose.animation.*
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,6 +21,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.PointerInputChange
+import kotlin.math.roundToInt
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,33 +48,159 @@ fun CopilotOverlay(
     var userQuestion by remember { mutableStateOf("") }
     val scrollState = rememberScrollState()
 
-    Box(
+    // انیمیشن‌های پیشرفته همیار مستقل رنگارنگ جمینایی/کوپایلاتی
+    val infiniteTransition = rememberInfiniteTransition(label = "copilot_glow")
+
+    // ۱. چرخش مداوم گرادیان رنگی (Gemini/Copilot-style gradient flow)
+    val colorShiftPhase by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(4000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "color_shift"
+    )
+
+    // ۲. نوسان افقی بسیار ریز برای جلب توجه چشمگیر (attention-grabbing shifts)
+    val localShiftX by infiniteTransition.animateFloat(
+        initialValue = -2.5f,
+        targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1250, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "local_shift_x"
+    )
+
+    // ۳. نوسان عمودی بسیار ریز (attention-grabbing shifts)
+    val localShiftY by infiniteTransition.animateFloat(
+        initialValue = -3.5f,
+        targetValue = 3.5f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1550, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "local_shift_y"
+    )
+
+    // ۴. تپش اندازه دکمه (attention-grabbing pulse scale)
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1750, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulse_scale"
+    )
+
+    // موقعیت دکمه کشیدنی در صفحه
+    var offsetX by remember { mutableStateOf(0f) }
+    var offsetY by remember { mutableStateOf(0f) }
+    var isInitialized by remember { mutableStateOf(false) }
+
+    BoxWithConstraints(
         modifier = Modifier.fillMaxSize()
     ) {
-        // ۱. دکمه شناور همیشه جلوی دید (Floating Circle Button)
+        val density = androidx.compose.ui.platform.LocalDensity.current
+        val maxWidthPx = with(density) { maxWidth.toPx() }
+        val maxHeightPx = with(density) { maxHeight.toPx() }
+
+        // مقداردهی اولیه موقعیت دکمه (کناره راست صفحه به صورت نیم‌دایره چسبیده)
+        if (!isInitialized && maxWidthPx > 0f) {
+            // دکمه با قطر ۵۰ پیکسل، ۲۵ پیکسل خارج صفحه قرار می‌گیرد تا نیم‌دایره شود
+            offsetX = maxWidthPx - with(density) { 25.dp.toPx() }
+            offsetY = maxHeightPx * 0.7f // در ارتفاع مناسب بالای نوار هدایت
+            isInitialized = true
+        }
+
+        // متغیر رهگیری کل میزان درگ برای تفکیک تپ با جابه‌جایی
+        var dragAccumulation by remember { mutableStateOf(0f) }
+
+        // ۱. دکمه شناور همیشه جلو دید (اگر همیار بسته باشد)
         if (!isCopilotOpen) {
             Box(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = 90.dp) // نوار مسیریابی پایین را قطع نکند
-                    .size(60.dp)
-                    .clip(CircleShape)
-                    .background(
-                        androidx.compose.ui.graphics.Brush.linearGradient(
-                            colors = listOf(Color(0xFF2563EB), Color(0xFF4F46E5))
+                    .offset {
+                        androidx.compose.ui.unit.IntOffset(
+                            (offsetX + with(density) { localShiftX.dp.toPx() }).roundToInt(),
+                            (offsetY + with(density) { localShiftY.dp.toPx() }).roundToInt()
                         )
-                    )
-                    .border(1.dp, Color.White.copy(alpha = 0.35f), CircleShape)
-                    .clickable { copilotViewModel.toggleCopilot() }
+                    }
+                    .size(50.dp)
+                    .pointerInput(Unit) {
+                        detectDragGestures(
+                            onDragStart = {
+                                dragAccumulation = 0f
+                            },
+                            onDragEnd = {
+                                // در صورتی که کاربر اصلاً درگ نکرده یا مسیر ناچیز بوده، آن را لمس کامل (CLICK) در نظر می‌گیریم
+                                if (dragAccumulation < with(density) { 15.dp.toPx() }) {
+                                    copilotViewModel.toggleCopilot()
+                                } else {
+                                    // چسبیدن خودکار به نزدیک‌ترین لبه عمودی چپ یا راست به صورت نیم‌دایره
+                                    val leftEdgeX = -with(density) { 25.dp.toPx() }
+                                    val rightEdgeX = maxWidthPx - with(density) { 25.dp.toPx() }
+                                    val middleScreen = maxWidthPx / 2f
+                                    offsetX = if (offsetX + with(density) { 25.dp.toPx() } < middleScreen) leftEdgeX else rightEdgeX
+                                }
+                            },
+                            onDragCancel = {
+                                val leftEdgeX = -with(density) { 25.dp.toPx() }
+                                val rightEdgeX = maxWidthPx - with(density) { 25.dp.toPx() }
+                                val middleScreen = maxWidthPx / 2f
+                                offsetX = if (offsetX + with(density) { 25.dp.toPx() } < middleScreen) leftEdgeX else rightEdgeX
+                            },
+                            onDrag = { change: PointerInputChange, dragAmount: Offset ->
+                                change.consume()
+                                offsetX += dragAmount.x
+                                offsetY += dragAmount.y
+
+                                // انباشت طول درگ
+                                dragAccumulation += kotlin.math.abs(dragAmount.x) + kotlin.math.abs(dragAmount.y)
+
+                                // جلوگیری از خروج دکمه از مرزهای بالا و پایین صفحه
+                                val minY = with(density) { 40.dp.toPx() }
+                                val maxY = maxHeightPx - with(density) { 100.dp.toPx() }
+                                offsetY = offsetY.coerceIn(minY, maxY)
+                            }
+                        )
+                    }
                     .testTag("floating_copilot_button"),
                 contentAlignment = Alignment.Center
             ) {
-                // آیکون ربات همیار حقوقی دادس
+                // المان چرخان رنگارنگ پس‌زمینه (رنگین‌کمانی جمینای)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer(
+                            rotationZ = colorShiftPhase,
+                            scaleX = pulseScale,
+                            scaleY = pulseScale
+                        )
+                        .clip(CircleShape)
+                        .background(
+                            androidx.compose.ui.graphics.Brush.sweepGradient(
+                                colors = listOf(
+                                    Color(0xFF9E00FF), // بنفش متالیک جمینای
+                                    Color(0xFF00E0FF), // سایان درخشان
+                                    Color(0xFFFF2E93), // صورتی نئونی کوپایلوت
+                                    Color(0xFFFFD600), // زرد فسفری
+                                    Color(0xFF2563EB), // آبی عمیق
+                                    Color(0xFF9E00FF)  // فرود بر نقطه اول جهت انسجام حلقه
+                                )
+                            )
+                        )
+                        .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape)
+                )
+
+                // آیکون ربات همیار حقوقی دادرس (همواره ثابت و خوانا)
                 Icon(
-                    imageVector = Icons.Default.Face,
+                    imageVector = Icons.Default.Star,
                     contentDescription = "همیار حقوقی دادرس",
                     tint = Color.White,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
@@ -111,7 +244,7 @@ fun CopilotOverlay(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "همیار حقوقی مستقل (هوش پیشرفته)",
+                                text = "دستیار هوشمند حقوقی",
                                 style = Typography.titleMedium,
                                 color = AccentGold,
                                 fontWeight = FontWeight.Bold
