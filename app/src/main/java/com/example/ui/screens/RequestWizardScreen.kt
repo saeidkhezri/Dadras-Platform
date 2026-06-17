@@ -9,6 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -26,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
 import com.example.ui.components.FrostedGlassBackground
+import com.example.ui.components.glassy3D
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.CitizenViewModel
 import kotlinx.coroutines.launch
@@ -57,6 +59,9 @@ fun RequestWizardScreen(
     val deepSeekOutput by citizenViewModel.deepSeekOutput.collectAsState()
     val qwenOutput by citizenViewModel.qwenOutput.collectAsState()
     val unifiedOutput by citizenViewModel.unifiedOutput.collectAsState()
+    val groqOutput by citizenViewModel.groqOutput.collectAsState()
+    val cohereOutput by citizenViewModel.cohereOutput.collectAsState()
+    val hfOutput by citizenViewModel.hfOutput.collectAsState()
 
     val isAnalyzing by citizenViewModel.isAnalyzing.collectAsState()
     val isGenerating by citizenViewModel.isGenerating.collectAsState()
@@ -125,7 +130,7 @@ fun RequestWizardScreen(
                             .fillMaxWidth()
                             .padding(bottom = 16.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.Top
                     ) {
                         (1..8).forEach { step ->
                             Column(
@@ -172,7 +177,9 @@ fun RequestWizardScreen(
                                     style = Typography.labelSmall,
                                     color = if (step == currentStep) AccentGold else onSurfaceColor,
                                     fontSize = 8.sp,
-                                    textAlign = TextAlign.Center
+                                    textAlign = TextAlign.Center,
+                                    maxLines = 2,
+                                    modifier = Modifier.heightIn(min = 24.dp)
                                 )
                             }
                         }
@@ -277,7 +284,9 @@ fun RequestWizardScreen(
                                         focusedTextColor = onBgColor,
                                         unfocusedTextColor = onBgColor,
                                         focusedBorderColor = AccentGold,
-                                        unfocusedBorderColor = glassBorderColor
+                                        unfocusedBorderColor = glassBorderColor,
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                                     )
                                 )
 
@@ -285,8 +294,7 @@ fun RequestWizardScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(surfaceColor, RoundedCornerShape(16.dp))
-                                        .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp))
+                                        .glassy3D(cornerRadius = 16.dp)
                                         .padding(16.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally
                                 ) {
@@ -408,8 +416,8 @@ fun RequestWizardScreen(
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
-                                    colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                        .glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.05f)),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(16.dp),
@@ -447,8 +455,7 @@ fun RequestWizardScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(surfaceColor, RoundedCornerShape(16.dp))
-                                        .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp))
+                                        .glassy3D(cornerRadius = 16.dp)
                                         .padding(16.dp)
                                 ) {
                                     Text(
@@ -516,7 +523,9 @@ fun RequestWizardScreen(
                                         focusedTextColor = onBgColor,
                                         unfocusedTextColor = onBgColor,
                                         focusedBorderColor = AccentGold,
-                                        unfocusedBorderColor = glassBorderColor
+                                        unfocusedBorderColor = glassBorderColor,
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                                     )
                                 )
                             }
@@ -574,28 +583,32 @@ fun RequestWizardScreen(
 
                                 // Horizontal output tabs including Qwen
                                 Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .horizontalScroll(rememberScrollState()),
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
                                     listOf(
-                                        Triple("deepseek", "DeepSeek", SoftCrimson),
-                                        Triple("qwen", "Qwen", AccentGold),
-                                        Triple("gpt", "GPT-4o", Color.Cyan),
-                                        Triple("claude", "Claude 3.5", AccentGold),
-                                        Triple("gemini", "Gemini 3.5", Color.Magenta),
-                                        Triple("unified", "یکپارچه", SoftEmerald)
+                                        Triple("deepseek", "DeepSeek (پایشگر)", SoftCrimson),
+                                        Triple("qwen", "Qwen (داور قضایی)", AccentGold),
+                                        Triple("gpt", "GPT-4o (سند مادر)", Color.Cyan),
+                                        Triple("claude", "Claude 3.5 (عقلانی)", AccentGold),
+                                        Triple("gemini", "Gemini 3.5 (بومی)", Color.Magenta),
+                                        Triple("groq", "Groq (پر سرعت)", AccentGold),
+                                        Triple("cohere", "Cohere (چندزبانه)", Color.Yellow),
+                                        Triple("hf", "HF LLaMA (سورس‌باز)", Color.LightGray),
+                                        Triple("unified", "یکپارچه نهایی", SoftEmerald)
                                     ).forEach { tabInfo ->
                                         val isSelected = activeOutputTab == tabInfo.first
                                         Box(
                                             modifier = Modifier
-                                                .weight(1f)
                                                 .background(if (isSelected) tabInfo.third.copy(alpha = 0.20f) else surfaceColor, RoundedCornerShape(8.dp))
                                                 .border(1.dp, if (isSelected) tabInfo.third else glassBorderColor, RoundedCornerShape(8.dp))
                                                 .clickable { activeOutputTab = tabInfo.first }
-                                                .padding(vertical = 8.dp),
+                                                .padding(horizontal = 14.dp, vertical = 10.dp),
                                             contentAlignment = Alignment.Center
                                         ) {
-                                            Text(text = tabInfo.second, style = Typography.labelSmall, color = if (isSelected) tabInfo.third else onBgColor, fontWeight = FontWeight.Bold, fontSize = 7.sp)
+                                            Text(text = tabInfo.second, style = Typography.labelSmall, color = if (isSelected) tabInfo.third else onBgColor, fontWeight = FontWeight.Bold, fontSize = 10.sp)
                                         }
                                     }
                                 }
@@ -608,12 +621,27 @@ fun RequestWizardScreen(
                                     "gemini" -> geminiOutput
                                     "deepseek" -> deepSeekOutput
                                     "qwen" -> qwenOutput
+                                    "groq" -> groqOutput
+                                    "cohere" -> cohereOutput
+                                    "hf" -> hfOutput
                                     else -> unifiedOutput
                                 }
 
                                 OutlinedTextField(
                                     value = activeText,
-                                    onValueChange = { citizenViewModel.updateUnifiedOutput(it) },
+                                    onValueChange = { editedText ->
+                                        when (activeOutputTab) {
+                                            "gpt" -> citizenViewModel.updateGptOutput(editedText)
+                                            "claude" -> citizenViewModel.updateClaudeOutput(editedText)
+                                            "gemini" -> citizenViewModel.updateGeminiOutput(editedText)
+                                            "deepseek" -> citizenViewModel.updateDeepSeekOutput(editedText)
+                                            "qwen" -> citizenViewModel.updateQwenOutput(editedText)
+                                            "groq" -> citizenViewModel.updateGroqOutput(editedText)
+                                            "cohere" -> citizenViewModel.updateCohereOutput(editedText)
+                                            "hf" -> citizenViewModel.updateHfOutput(editedText)
+                                            else -> citizenViewModel.updateUnifiedOutput(editedText)
+                                        }
+                                    },
                                     modifier = Modifier
                                         .fillMaxWidth()
                                         .height(200.dp),
@@ -621,7 +649,9 @@ fun RequestWizardScreen(
                                         focusedTextColor = onBgColor,
                                         unfocusedTextColor = onBgColor,
                                         focusedBorderColor = AccentGold,
-                                        unfocusedBorderColor = glassBorderColor
+                                        unfocusedBorderColor = glassBorderColor,
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                                     ),
                                     textStyle = TextStyle(fontSize = 13.sp, lineHeight = 20.sp, textDirection = androidx.compose.ui.text.style.TextDirection.Rtl)
                                 )
@@ -630,8 +660,8 @@ fun RequestWizardScreen(
 
                                 // Switches and Interactive simulators
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
-                                    colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                    modifier = Modifier.fillMaxWidth().glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.05f)),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(16.dp),
@@ -718,8 +748,8 @@ fun RequestWizardScreen(
 
                                 // Interactive debate mode nested inside step 7
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
-                                    colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                    modifier = Modifier.fillMaxWidth().glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.05f)),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(16.dp),
@@ -824,8 +854,8 @@ fun RequestWizardScreen(
 
                                 // Litigation Simulator Pathway inside Step 7
                                 Card(
-                                    modifier = Modifier.fillMaxWidth().border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
-                                    colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                    modifier = Modifier.fillMaxWidth().glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.05f)),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                 ) {
                                     Column(
                                         modifier = Modifier.padding(16.dp),
@@ -927,8 +957,7 @@ fun RequestWizardScreen(
                                 Column(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .background(surfaceColor, RoundedCornerShape(16.dp))
-                                        .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp))
+                                        .glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.05f))
                                         .padding(16.dp),
                                     verticalArrangement = Arrangement.spacedBy(12.dp)
                                 ) {
@@ -983,7 +1012,9 @@ fun RequestWizardScreen(
                                         focusedTextColor = onBgColor,
                                         unfocusedTextColor = onBgColor,
                                         focusedBorderColor = AccentGold,
-                                        unfocusedBorderColor = glassBorderColor
+                                        unfocusedBorderColor = glassBorderColor,
+                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
                                     )
                                 )
 
@@ -1084,7 +1115,9 @@ fun IdentityRow(label: String, value: String, onValueChange: (String) -> Unit) {
                 focusedTextColor = MaterialTheme.colorScheme.onBackground,
                 unfocusedTextColor = MaterialTheme.colorScheme.onBackground,
                 focusedBorderColor = AccentGold,
-                unfocusedBorderColor = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0x33000000) else GlassBorderDark
+                unfocusedBorderColor = if (MaterialTheme.colorScheme.background.luminance() > 0.5f) Color(0x33000000) else GlassBorderDark,
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface
             ),
             textStyle = TextStyle(fontSize = 12.sp, textDirection = androidx.compose.ui.text.style.TextDirection.Rtl)
         )

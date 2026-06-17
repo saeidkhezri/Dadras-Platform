@@ -93,6 +93,7 @@ data class AuditEvent(
 )
 
 object AiOrchestrator {
+    var appContext: Context? = null
     // کلیدهای ثبت شده توسط ادمین در پایگاه داده محلی
     var adminGeminiKey: String = ""
     var adminOpenRouterKey: String = ""
@@ -102,18 +103,20 @@ object AiOrchestrator {
     var openrouterKeysList: List<String> = emptyList()
     var openaiKeysList: List<String> = emptyList()
 
-    // PREDEFINED API KEYS IN CRYPTO-OBFUSCATED REPOSITORY
-    private val OBFUSCATED_OPENROUTER_KEYS = listOf(
-        // sk-or-v1-22b602d2bd64b407c949adf8...
-        KeyEncryptor.obfuscate("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"),
-        KeyEncryptor.obfuscate("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")
-    )
+    // ۳ وب‌سرویس جدید اضافه شده
+    var groqKeysList: List<String> = emptyList()
+    var cohereKeysList: List<String> = emptyList()
+    var huggingfaceKeysList: List<String> = emptyList()
 
-    private val OBFUSCATED_OPENAI_KEYS = listOf(
-        KeyEncryptor.obfuscate("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"),
-        KeyEncryptor.obfuscate("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"),
-        KeyEncryptor.obfuscate("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")
-    )
+    var openRouterBaseUrl: String = "https://openrouter.ai/"
+    var openAiBaseUrl: String = "https://api.openai.com/"
+    var groqBaseUrl: String = "https://api.groq.com/"
+    var cohereBaseUrl: String = "https://api.cohere.com/"
+    var huggingFaceBaseUrl: String = "https://api-inference.huggingface.co/"
+
+    // تمام کلیدهای سخت‌کد از کل سورس برنامه‌نویسی مستقل حذف شدند
+    private val OBFUSCATED_OPENROUTER_KEYS = emptyList<String>()
+    private val OBFUSCATED_OPENAI_KEYS = emptyList<String>()
 
     // === 1. Model Registry ===
     private val _models = MutableStateFlow(
@@ -122,7 +125,10 @@ object AiOrchestrator {
             ModelInfo("Claude 3.5 Sonnet", "OpenRouter", "Tier 1 - reasoning", "Active", 6, 8, 10, 98, "۱ دقیقه قبل"),
             ModelInfo("DeepSeek Llama-3", "OpenRouter", "Tier 2 - verification", "Active", 9, 7, 8, 95, "۵ دقیقه قبل"),
             ModelInfo("Qwen-2.5-72B", "OpenRouter", "Tier 3 - meta judge", "Active", 9, 8, 9, 97, "۳ دقیقه قبل"),
-            ModelInfo("Gemini 1.5 Pro", "OpenRouter", "Tier 4 - optional", "Active", 8, 9, 9, 99, "هم‌اکنون")
+            ModelInfo("Gemini 1.5 Pro", "OpenRouter", "Tier 4 - optional", "Active", 8, 9, 9, 99, "هم‌اکنون"),
+            ModelInfo("Groq LLaMA-3 (رایگان)", "Groq", "Tier 2 - speed", "Active", 10, 10, 8, 99, "هم‌اکنون"),
+            ModelInfo("Cohere Command-R (رایگان)", "Cohere", "Tier 2 - multilingual", "Active", 9, 8, 9, 98, "هم‌اکنون"),
+            ModelInfo("HF LLaMA-3 (رایگان)", "HuggingFace", "Tier 3 - open-source", "Active", 10, 7, 8, 95, "هم‌اکنون")
         )
     )
     val models = _models.asStateFlow()
@@ -280,6 +286,7 @@ object AiOrchestrator {
     }
 
     private val client = okhttp3.OkHttpClient.Builder()
+        .addInterceptor(SecureStorageKeyInterceptor())
         .connectTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .readTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
         .writeTimeout(30, java.util.concurrent.TimeUnit.SECONDS)
@@ -306,8 +313,10 @@ object AiOrchestrator {
             put("temperature", 0.4)
         }
 
+        val baseUrl = openRouterBaseUrl.trim().removeSuffix("/")
+        val finalUrl = "$baseUrl/api/v1/chat/completions"
         val request = okhttp3.Request.Builder()
-            .url("https://openrouter.ai/api/v1/chat/completions")
+            .url(finalUrl)
             .post(jsonBody.toString().toRequestBody(mediaType))
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
@@ -350,8 +359,10 @@ object AiOrchestrator {
             put("temperature", 0.4)
         }
 
+        val baseUrl = openAiBaseUrl.trim().removeSuffix("/")
+        val finalUrl = "$baseUrl/v1/chat/completions"
         val request = okhttp3.Request.Builder()
-            .url("https://api.openai.com/v1/chat/completions")
+            .url(finalUrl)
             .post(jsonBody.toString().toRequestBody(mediaType))
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
@@ -371,6 +382,130 @@ object AiOrchestrator {
         }
     }
 
+    private suspend fun callGroqEndpoint(apiKey: String, prompt: String, systemInstruction: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val messagesArray = org.json.JSONArray()
+        if (systemInstruction != null && systemInstruction.isNotEmpty()) {
+            messagesArray.put(org.json.JSONObject().apply {
+                put("role", "system")
+                put("content", systemInstruction)
+            })
+        }
+        messagesArray.put(org.json.JSONObject().apply {
+            put("role", "user")
+            put("content", prompt)
+        })
+
+        val jsonBody = org.json.JSONObject().apply {
+            put("model", "llama3-8b-8192")
+            put("messages", messagesArray)
+            put("temperature", 0.3)
+        }
+
+        val baseUrl = groqBaseUrl.trim().removeSuffix("/")
+        val finalUrl = "$baseUrl/openai/v1/chat/completions"
+        val request = okhttp3.Request.Builder()
+            .url(finalUrl)
+            .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("کد خطای گراک: ${response.code} ${response.message}")
+            val bodyString = response.body?.string() ?: throw Exception("پاسخ گراک تهی است")
+            val jsonResponse = org.json.JSONObject(bodyString)
+            val choices = jsonResponse.getJSONArray("choices")
+            if (choices.length() > 0) {
+                return@withContext choices.getJSONObject(0).getJSONObject("message").getString("content")
+            }
+            throw Exception("عدم امکان استخراج فیلد پاسخ گراک")
+        }
+    }
+
+    private suspend fun callCohereEndpoint(apiKey: String, prompt: String, systemInstruction: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        
+        val jsonBody = org.json.JSONObject().apply {
+            put("model", "command-r")
+            put("message", if (systemInstruction != null) "$systemInstruction\n\n$prompt" else prompt)
+            put("temperature", 0.3)
+        }
+
+        val baseUrl = cohereBaseUrl.trim().removeSuffix("/")
+        val finalUrl = "$baseUrl/v1/chat"
+        val request = okhttp3.Request.Builder()
+            .url(finalUrl)
+            .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("کد خطای کوهر: ${response.code} ${response.message}")
+            val bodyString = response.body?.string() ?: throw Exception("پاسخ کوهر تهی است")
+            val jsonResponse = org.json.JSONObject(bodyString)
+            if (jsonResponse.has("text")) {
+                return@withContext jsonResponse.getString("text")
+            }
+            throw Exception("عدم امکان استخراج فیلد پاسخ کوهر")
+        }
+    }
+
+    private suspend fun callHuggingFaceEndpoint(apiKey: String, prompt: String, systemInstruction: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        
+        val fullPrompt = if (systemInstruction != null) "$systemInstruction\n\nUser: $prompt\nAssistant:" else prompt
+        val jsonBody = org.json.JSONObject().apply {
+            put("inputs", fullPrompt)
+            put("parameters", org.json.JSONObject().apply {
+                put("max_new_tokens", 512)
+                put("temperature", 0.5)
+            })
+        }
+
+        val baseUrl = huggingFaceBaseUrl.trim().removeSuffix("/")
+        val finalUrl = "$baseUrl/models/meta-llama/Meta-Llama-3-8B-Instruct"
+        val request = okhttp3.Request.Builder()
+            .url(finalUrl)
+            .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("کد خطای هاگینگ‌فیس: ${response.code} ${response.message}")
+            val bodyString = response.body?.string() ?: throw Exception("پاسخ هاگینگ‌فیس تهی است")
+            
+            // Can be string or array
+            if (bodyString.trim().startsWith("[")) {
+                val jsonArray = org.json.JSONArray(bodyString)
+                if (jsonArray.length() > 0) {
+                    val element = jsonArray.getJSONObject(0)
+                    if (element.has("generated_text")) {
+                        val fullText = element.getString("generated_text")
+                        return@withContext if (fullText.startsWith(fullPrompt)) {
+                            fullText.substring(fullPrompt.length).trim()
+                        } else {
+                            fullText.trim()
+                        }
+                    }
+                }
+            } else {
+                val jsonResponse = org.json.JSONObject(bodyString)
+                if (jsonResponse.has("generated_text")) {
+                    val fullText = jsonResponse.getString("generated_text")
+                    return@withContext if (fullText.startsWith(fullPrompt)) {
+                        fullText.substring(fullPrompt.length).trim()
+                    } else {
+                        fullText.trim()
+                    }
+                }
+            }
+            throw Exception("عدم امکان استخراج فیلد پاسخ هاگینگ‌فیس")
+        }
+    }
+
     private suspend fun callModelGateway(model: String, prompt: String, systemInstruction: String?): String {
         val openRouterKey = if (adminOpenRouterKey.isNotBlank()) adminOpenRouterKey else try { BuildConfig.OPENROUTER_API_KEY } catch (e: Exception) { "" }
         val openAiKey = if (adminOpenAiKey.isNotBlank()) adminOpenAiKey else try { BuildConfig.OPENAI_API_KEY } catch (e: Exception) { "" }
@@ -381,12 +516,61 @@ object AiOrchestrator {
         val oaKeys = (openaiKeysList + listOf(openAiKey)).filter { it.isNotBlank() && it != "YOUR_OPENAI_API_KEY" }.distinct()
         val geKeys = (geminiKeysList + listOf(geminiKey)).filter { it.isNotBlank() && it != "MY_GEMINI_API_KEY" }.distinct()
 
+        val grKeys = groqKeysList.filter { it.isNotBlank() }
+        val coKeys = cohereKeysList.filter { it.isNotBlank() }
+        val hfKeys = huggingfaceKeysList.filter { it.isNotBlank() }
+
         // Inject the mandatory guideline to use the latest online/updated version of Iranian laws and decisions
         val onlineLawDirective = "\n\n[راهنمای حیاتی سیستم: همواره فرض کنید به وب زنده متصل هستید و در این دادرسی موظف هستید آخرین نسخه، معتبرترین اصلاحیه‌ها، قوانین و بخشنامه‌های قضایی سال جاری کشور را به صورت آنلاین و برخط جستجو و اعمال نمایید تا اسناد قضایی و آرای وحدت رویه کاملا منطبق بر آخرین تغییرات رسمی روزنامه رسمی کشور صادر شده باشند.]"
         val enhancedSystemInstruction = if (systemInstruction != null) {
             systemInstruction + onlineLawDirective
         } else {
             "شما دستیار حقوقی هوشمند پلتفرم مستقل دادرس هستید." + onlineLawDirective
+        }
+
+        // 1. Direct Groq Calling
+        if (model.contains("Groq") || grKeys.isNotEmpty()) {
+            val keysToTry = if (grKeys.isNotEmpty()) grKeys else listOf(openRouterKey).filter { it.isNotBlank() }
+            if (keysToTry.isNotEmpty()) {
+                for ((index, key) in keysToTry.withIndex()) {
+                    try {
+                        logAuditEvent("AI_CALL_DETAIL", "تلاش با کلید شماره ${index+1} ارائه‌دهنده Groq...")
+                        return callGroqEndpoint(key, prompt, enhancedSystemInstruction)
+                    } catch (e: Exception) {
+                        logAuditEvent("AI_REST_ERROR", "خطا در کلید گراک شماره ${index+1}: ${e.localizedMessage}")
+                    }
+                }
+            }
+        }
+
+        // 2. Direct Cohere Calling
+        if (model.contains("Cohere") || coKeys.isNotEmpty()) {
+            val keysToTry = if (coKeys.isNotEmpty()) coKeys else listOf(openRouterKey).filter { it.isNotBlank() }
+            if (keysToTry.isNotEmpty()) {
+                for ((index, key) in keysToTry.withIndex()) {
+                    try {
+                        logAuditEvent("AI_CALL_DETAIL", "تلاش با کلید شماره ${index+1} ارائه‌دهنده Cohere...")
+                        return callCohereEndpoint(key, prompt, enhancedSystemInstruction)
+                    } catch (e: Exception) {
+                        logAuditEvent("AI_REST_ERROR", "خطا در کلید کوهر شماره ${index+1}: ${e.localizedMessage}")
+                    }
+                }
+            }
+        }
+
+        // 3. Direct HuggingFace Calling
+        if (model.contains("HF") || hfKeys.isNotEmpty()) {
+            val keysToTry = hfKeys
+            if (keysToTry.isNotEmpty()) {
+                for ((index, key) in keysToTry.withIndex()) {
+                    try {
+                        logAuditEvent("AI_CALL_DETAIL", "تلاش با کلید شماره ${index+1} ارائه‌دهنده HuggingFace...")
+                        return callHuggingFaceEndpoint(key, prompt, enhancedSystemInstruction)
+                    } catch (e: Exception) {
+                        logAuditEvent("AI_REST_ERROR", "خطا در کلید هاگینگ‌فیس شماره ${index+1}: ${e.localizedMessage}")
+                    }
+                }
+            }
         }
 
         // Determine Model ID for OpenRouter mapping
@@ -399,7 +583,7 @@ object AiOrchestrator {
             else -> "openai/gpt-4o"
         }
 
-        // 1. Try OpenRouter first if keys are present
+        // 4. Try OpenRouter first if keys are present
         if (opKeys.isNotEmpty()) {
             for ((index, key) in opKeys.withIndex()) {
                 try {
@@ -411,7 +595,7 @@ object AiOrchestrator {
             }
         }
 
-        // 2. Try OpenAI direct if model is GPT-4o and keys are present
+        // 5. Try OpenAI direct if model is GPT-4o and keys are present
         if (model == "GPT-4o Enterprise" && oaKeys.isNotEmpty()) {
             for ((index, key) in oaKeys.withIndex()) {
                 try {
@@ -423,7 +607,7 @@ object AiOrchestrator {
             }
         }
 
-        // 3. Try direct Google Gemini client
+        // 6. Try direct Google Gemini client
         if (model == "Gemini 1.5 Pro" || opKeys.isEmpty()) {
             val keysToTry = if (geKeys.isNotEmpty()) geKeys else listOf(geminiKey).filter { it.isNotBlank() }
             if (keysToTry.isNotEmpty()) {
@@ -438,9 +622,14 @@ object AiOrchestrator {
             }
         }
 
-        // 4. Fallback to pre-set outputs if no active keys or if they failed
-        kotlinx.coroutines.delay(1000)
-        return getOrchestrationLocalFallback(prompt, model)
+        // 7. Fallback to live free keyless model if no active keys or if they failed
+        try {
+            logAuditEvent("AI_FALLBACK", "تلاش برای استفاده از وب‌سرویس آزاد بدون نیاز به کلید برای مدل $model...")
+            return KeylessAiHelper.callKeylessPollinations(prompt, enhancedSystemInstruction, model)
+        } catch (e: Exception) {
+            logAuditEvent("AI_EMERGENCY", "خطا در اتصال به موتور آزاد: ${e.localizedMessage}. استفاده از سند اضطراری موضعی.")
+            return getOrchestrationLocalFallback(prompt, model)
+        }
     }
 
     // === Confidence Dynamic Calculator (0-100) ===
@@ -543,6 +732,43 @@ object AiOrchestrator {
             else -> {
                 "لایحه و نظریه کمکی بر اساس آخرین مصوبات مجلس شورای اسلامی ایران و ضوابط دادرسی رسمی کشور تدوین گردیده است."
             }
+        }
+    }
+
+    // === API Verification & Diagnostics ===
+    suspend fun testProviderConnection(provider: String, key: String): String = withContext(Dispatchers.IO) {
+        val testPrompt = "سلام"
+        val testInstruction = "کوتاه‌ترین پاسخ ممكن را به فارسی بنویس"
+        try {
+            when (provider) {
+                "gemini" -> {
+                    val res = GeminiHelper.askGeminiWithKey(testPrompt, testInstruction, key)
+                    if (res.isNotBlank() && !res.contains("خطا")) "اتصال آزمایشی با موفقیت برقرار شد." else throw Exception("پاسخ جمینای خالی یا نامعتبر است.")
+                }
+                "openrouter" -> {
+                    val res = callOpenRouterEndpoint("openai/gpt-4o", key, testPrompt, testInstruction)
+                    if (res.isNotBlank()) "اتصال آزمایشی به OpenRouter با موفقیت انجام شد." else throw Exception("پاسخ خالی است.")
+                }
+                "openai" -> {
+                    val res = callOpenAiEndpoint("gpt-4o", key, testPrompt, testInstruction)
+                    if (res.isNotBlank()) "اتصال آزمایشی به OpenAI با موفقیت انجام شد." else throw Exception("پاسخ خالی است.")
+                }
+                "groq" -> {
+                    val res = callGroqEndpoint(key, testPrompt, testInstruction)
+                    if (res.isNotBlank()) "اتصال آزمایشی به Groq با موفقیت انجام شد." else throw Exception("پاسخ خالی است.")
+                }
+                "cohere" -> {
+                    val res = callCohereEndpoint(key, testPrompt, testInstruction)
+                    if (res.isNotBlank()) "اتصال آزمایشی به Cohere با موفقیت انجام شد." else throw Exception("پاسخ خالی است.")
+                }
+                "hf" -> {
+                    val res = callHuggingFaceEndpoint(key, testPrompt, testInstruction)
+                    if (res.isNotBlank()) "اتصال آزمایشی به HuggingFace با موفقیت انجام شد." else throw Exception("پاسخ خالی است.")
+                }
+                else -> throw Exception("ارائه‌دهنده شناخته‌نشده است.")
+            }
+        } catch (e: Exception) {
+            throw Exception(e.localizedMessage ?: "خطای ارتباطاتی با سرور")
         }
     }
 }

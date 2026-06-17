@@ -66,22 +66,38 @@ interface GeminiApiService {
 }
 
 object RetrofitClient {
-    private const val BASE_URL = "https://generativelanguage.googleapis.com/"
+    var customBaseUrl: String = "https://generativelanguage.googleapis.com/"
+        set(value) {
+            val safeVal = value.trim()
+            field = if (safeVal.isNotBlank()) safeVal else "https://generativelanguage.googleapis.com/"
+            _service = null
+        }
 
-    private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(30, TimeUnit.SECONDS)
-        .build()
+    private var _service: GeminiApiService? = null
 
-    val service: GeminiApiService by lazy {
-        val retrofit = Retrofit.Builder()
-            .baseUrl(BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(MoshiConverterFactory.create())
-            .build()
-        retrofit.create(GeminiApiService::class.java)
-    }
+    val service: GeminiApiService
+        get() {
+            val srv = _service
+            if (srv != null) return srv
+
+            val safeBase = if (customBaseUrl.endsWith("/")) customBaseUrl else "$customBaseUrl/"
+            val okHttpClient = OkHttpClient.Builder()
+                .addInterceptor(SecureStorageKeyInterceptor())
+                .connectTimeout(45, TimeUnit.SECONDS)
+                .readTimeout(45, TimeUnit.SECONDS)
+                .writeTimeout(45, TimeUnit.SECONDS)
+                .build()
+
+            val retrofit = Retrofit.Builder()
+                .baseUrl(safeBase)
+                .client(okHttpClient)
+                .addConverterFactory(MoshiConverterFactory.create())
+                .build()
+
+            val newSrv = retrofit.create(GeminiApiService::class.java)
+            _service = newSrv
+            return newSrv
+        }
 }
 
 object GeminiHelper {
@@ -92,8 +108,12 @@ object GeminiHelper {
 
     suspend fun askGeminiWithKey(prompt: String, systemInstruction: String? = null, key: String): String = withContext(Dispatchers.IO) {
         if (key.isEmpty() || key == "MY_GEMINI_API_KEY") {
-            // در صورتی که کلید در دسترس نباشد از پاسخ شبیه‌سازی‌شده هوشمند استفاده می‌کنیم تا برنامه کاملاً قابل استفاده بماند
-            return@withContext getLocalFallback(prompt, systemInstruction)
+            return@withContext try {
+                KeylessAiHelper.callKeylessPollinations(prompt, systemInstruction, "openai")
+            } catch (ex: Exception) {
+                ex.printStackTrace()
+                getLocalFallback(prompt, systemInstruction)
+            }
         }
 
         val request = GenerateContentRequest(
@@ -104,11 +124,23 @@ object GeminiHelper {
 
         try {
             val response = RetrofitClient.service.generateContent(key, request)
-            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text 
-                ?: getLocalFallback(prompt, systemInstruction)
+            val bodyText = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text
+            if (bodyText != null) {
+                bodyText
+            } else {
+                try {
+                    KeylessAiHelper.callKeylessPollinations(prompt, systemInstruction, "openai")
+                } catch (ex: Exception) {
+                    getLocalFallback(prompt, systemInstruction)
+                }
+            }
         } catch (e: Exception) {
             e.printStackTrace()
-            getLocalFallback(prompt, systemInstruction)
+            try {
+                KeylessAiHelper.callKeylessPollinations(prompt, systemInstruction, "openai")
+            } catch (ex: Exception) {
+                getLocalFallback(prompt, systemInstruction)
+            }
         }
     }
 

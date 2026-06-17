@@ -26,8 +26,19 @@ import com.example.viewmodel.CopilotViewModel
 import com.example.viewmodel.UserRole
 
 class MainActivity : ComponentActivity() {
+    override fun onPause() {
+        super.onPause()
+        try {
+            val authViewModel = androidx.lifecycle.ViewModelProvider(this)[com.example.viewmodel.AuthViewModel::class.java]
+            authViewModel.markActivityTime()
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        com.example.network.AiOrchestrator.appContext = applicationContext
         enableEdgeToEdge()
         setContent {
             val authViewModel: AuthViewModel = viewModel()
@@ -36,9 +47,11 @@ class MainActivity : ComponentActivity() {
             val copilotViewModel: CopilotViewModel = viewModel()
 
             val isDarkTheme by authViewModel.isDarkTheme.collectAsState()
+            val isDynamicBg by authViewModel.isDynamicBackground.collectAsState()
 
-            MyApplicationTheme(darkTheme = isDarkTheme) {
-                val session by authViewModel.session.collectAsState()
+            CompositionLocalProvider(com.example.ui.components.LocalDynamicBackground provides isDynamicBg) {
+                MyApplicationTheme(darkTheme = isDarkTheme) {
+                    val session by authViewModel.session.collectAsState()
                 val navController = rememberNavController()
 
                 // ردیابی نام صفحه جاری برای راهنمایی هوشمند دستیار کپیلوت
@@ -83,6 +96,7 @@ class MainActivity : ComponentActivity() {
                                 CitizenDashboardScreen(
                                     authViewModel = authViewModel,
                                     citizenViewModel = citizenViewModel,
+                                    adminViewModel = adminViewModel,
                                     onNavigateToWizard = { navController.navigate("wizard") },
                                     onNavigateToCase = { id -> navController.navigate("case_detail/$id") },
                                     onNavigateToLibrary = { navController.navigate("library") }
@@ -155,4 +169,5 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+}
 }

@@ -5,6 +5,8 @@ import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.*
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -40,6 +42,9 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     private val _isDarkTheme = MutableStateFlow(true)
     val isDarkTheme: StateFlow<Boolean> = _isDarkTheme.asStateFlow()
 
+    private val _isDynamicBackground = MutableStateFlow(true)
+    val isDynamicBackground: StateFlow<Boolean> = _isDynamicBackground.asStateFlow()
+
     private val _isPersianNumbersEnabled = MutableStateFlow(true)
     val isPersianNumbersEnabled: StateFlow<Boolean> = _isPersianNumbersEnabled.asStateFlow()
 
@@ -52,10 +57,15 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
                 registeredUsers = it
             }
         }
+        restoreSessionIfValid()
     }
 
     fun toggleTheme() {
         _isDarkTheme.value = !_isDarkTheme.value
+    }
+
+    fun toggleDynamicBackground() {
+        _isDynamicBackground.value = !_isDynamicBackground.value
     }
 
     fun toggleNumberFormat() {
@@ -138,10 +148,48 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun markActivityTime() {
+        val sess = _session.value
+        if (sess != null) {
+            val prefs = getApplication<Application>().getSharedPreferences("user_session_prefs", Context.MODE_PRIVATE)
+            prefs.edit()
+                .putString("username", sess.username)
+                .putString("role", sess.role.name)
+                .putString("token", sess.token)
+                .putLong("last_active_time", System.currentTimeMillis())
+                .apply()
+        }
+    }
+
+    fun restoreSessionIfValid() {
+        val prefs = getApplication<Application>().getSharedPreferences("user_session_prefs", Context.MODE_PRIVATE)
+        val username = prefs.getString("username", null)
+        val roleStr = prefs.getString("role", null)
+        val token = prefs.getString("token", null)
+        val lastActive = prefs.getLong("last_active_time", 0)
+
+        if (username != null && roleStr != null && token != null && lastActive > 0) {
+            val diff = System.currentTimeMillis() - lastActive
+            // 5 minutes is 300,000 milliseconds
+            if (diff <= 300000) {
+                try {
+                    val role = UserRole.valueOf(roleStr)
+                    _session.value = UserSession(username, role, token)
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            } else {
+                prefs.edit().clear().apply()
+            }
+        }
+    }
+
     fun logout() {
         val currentUsername = _session.value?.username ?: "نامشخص"
         _session.value = null
         _isPasswordChangeRequired.value = false
+        val prefs = getApplication<Application>().getSharedPreferences("user_session_prefs", Context.MODE_PRIVATE)
+        prefs.edit().clear().apply()
         viewModelScope.launch {
             logDao.insertLog(ActivityLogEntity(username = currentUsername, action = "خروج از سامانه مستقل", date = getPersianDateNow()))
         }
@@ -210,32 +258,57 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
     private val _openrouterApiKeys = MutableStateFlow<List<String>>(emptyList())
     val openrouterApiKeys = _openrouterApiKeys.asStateFlow()
 
+    private val _geminiProxyUrl = MutableStateFlow("https://generativelanguage.googleapis.com/")
+    val geminiProxyUrl = _geminiProxyUrl.asStateFlow()
+
+    // ۳ وب‌سرویس جدید اضافه شده
+    private val _groqApiKeys = MutableStateFlow<List<String>>(emptyList())
+    val groqApiKeys = _groqApiKeys.asStateFlow()
+
+    private val _cohereApiKeys = MutableStateFlow<List<String>>(emptyList())
+    val cohereApiKeys = _cohereApiKeys.asStateFlow()
+
+    private val _huggingfaceApiKeys = MutableStateFlow<List<String>>(emptyList())
+    val huggingfaceApiKeys = _huggingfaceApiKeys.asStateFlow()
+
     init {
         val prefs = application.getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
         
-        // در اولین راه‌اندازی، کلیدهای پرمیوم به‌طور پیش‌فرض در دیتابیس محلی بارگذاری می‌شوند تا سامانه کاملاً فعال باشد
-        if (!prefs.contains("keys_initialized")) {
-            val defaultOpenRouterKey1 = com.example.network.KeyEncryptor.deobfuscate("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")
-            val defaultOpenRouterKey2 = com.example.network.KeyEncryptor.deobfuscate("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")
-            
-            val defaultOpenAiKey1 = com.example.network.KeyEncryptor.deobfuscate("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")
-            val defaultOpenAiKey2 = com.example.network.KeyEncryptor.deobfuscate("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")
-            val defaultOpenAiKey3 = com.example.network.KeyEncryptor.deobfuscate("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")
-            
+        // در اولین راه‌اندازی، هیچ کلید سخت‌کدی در برنامه وجود ندارد و کاربر خودش مقادیر را تنظیم می‌کند
+        if (!prefs.contains("keys_initialized") || !prefs.contains("openai_proxy_url")) {
             val defaultGeminiKey = try { com.example.BuildConfig.GEMINI_API_KEY } catch (e: Exception) { "" }
-
-            prefs.edit()
-                .putString("gemini_key_1", defaultGeminiKey)
-                .putString("gemini_key_2", "")
-                .putString("gemini_key_3", "")
-                .putString("openrouter_key_1", defaultOpenRouterKey1)
-                .putString("openrouter_key_2", defaultOpenRouterKey2)
-                .putString("openrouter_key_3", "")
-                .putString("openai_key_1", defaultOpenAiKey1)
-                .putString("openai_key_2", defaultOpenAiKey2)
-                .putString("openai_key_3", defaultOpenAiKey3)
-                .putBoolean("keys_initialized", true)
-                .apply()
+            val editor = prefs.edit()
+            
+            if (!prefs.contains("keys_initialized")) {
+                editor.putString("gemini_key_1", defaultGeminiKey)
+                editor.putString("gemini_key_2", "")
+                editor.putString("gemini_key_3", "")
+                editor.putString("openrouter_key_1", "")
+                editor.putString("openrouter_key_2", "")
+                editor.putString("openrouter_key_3", "")
+                editor.putString("openai_key_1", "")
+                editor.putString("openai_key_2", "")
+                editor.putString("openai_key_3", "")
+                editor.putString("groq_key_1", "")
+                editor.putString("groq_key_2", "")
+                editor.putString("groq_key_3", "")
+                editor.putString("cohere_key_1", "")
+                editor.putString("cohere_key_2", "")
+                editor.putString("cohere_key_3", "")
+                editor.putString("huggingface_key_1", "")
+                editor.putString("huggingface_key_2", "")
+                editor.putString("huggingface_key_3", "")
+                editor.putBoolean("keys_initialized", true)
+            }
+            if (!prefs.contains("gemini_proxy_url")) {
+                editor.putString("gemini_proxy_url", "https://generativelanguage.googleapis.com/")
+            }
+            editor.putString("openrouter_proxy_url", prefs.getString("openrouter_proxy_url", "https://openrouter.ai/"))
+            editor.putString("openai_proxy_url", prefs.getString("openai_proxy_url", "https://api.openai.com/"))
+            editor.putString("groq_proxy_url", prefs.getString("groq_proxy_url", "https://api.groq.com/"))
+            editor.putString("cohere_proxy_url", prefs.getString("cohere_proxy_url", "https://api.cohere.com/"))
+            editor.putString("huggingface_proxy_url", prefs.getString("huggingface_proxy_url", "https://api-inference.huggingface.co/"))
+            editor.apply()
         }
 
         val g1 = prefs.getString("gemini_key_1", "") ?: ""
@@ -250,14 +323,32 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         val or2 = prefs.getString("openrouter_key_2", "") ?: ""
         val or3 = prefs.getString("openrouter_key_3", "") ?: ""
 
+        val gr1 = prefs.getString("groq_key_1", "") ?: ""
+        val gr2 = prefs.getString("groq_key_2", "") ?: ""
+        val gr3 = prefs.getString("groq_key_3", "") ?: ""
+
+        val co1 = prefs.getString("cohere_key_1", "") ?: ""
+        val co2 = prefs.getString("cohere_key_2", "") ?: ""
+        val co3 = prefs.getString("cohere_key_3", "") ?: ""
+
+        val hf1 = prefs.getString("huggingface_key_1", "") ?: ""
+        val hf2 = prefs.getString("huggingface_key_2", "") ?: ""
+        val hf3 = prefs.getString("huggingface_key_3", "") ?: ""
+        val proxyUrl = prefs.getString("gemini_proxy_url", "https://generativelanguage.googleapis.com/") ?: "https://generativelanguage.googleapis.com/"
+
         _geminiApiKeys.value = listOf(g1, g2, g3)
         _openaiApiKeys.value = listOf(o1, o2, o3)
         _openrouterApiKeys.value = listOf(or1, or2, or3)
+        _groqApiKeys.value = listOf(gr1, gr2, gr3)
+        _cohereApiKeys.value = listOf(co1, co2, co3)
+        _huggingfaceApiKeys.value = listOf(hf1, hf2, hf3)
+        _geminiProxyUrl.value = proxyUrl
 
         _geminiApiKey.value = g1.ifBlank { g2.ifBlank { g3 } }
         _openaiApiKey.value = o1.ifBlank { o2.ifBlank { o3 } }
         _openrouterApiKey.value = or1.ifBlank { or2.ifBlank { or3 } }
 
+        com.example.network.RetrofitClient.customBaseUrl = proxyUrl
         syncOrchestratorKeys()
     }
 
@@ -273,46 +364,79 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         com.example.network.AiOrchestrator.geminiKeysList = _geminiApiKeys.value.filter { it.isNotBlank() }
         com.example.network.AiOrchestrator.openrouterKeysList = _openrouterApiKeys.value.filter { it.isNotBlank() }
         com.example.network.AiOrchestrator.openaiKeysList = _openaiApiKeys.value.filter { it.isNotBlank() }
+
+        // وب‌سرویس‌های جدید
+        com.example.network.AiOrchestrator.groqKeysList = _groqApiKeys.value.filter { it.isNotBlank() }
+        com.example.network.AiOrchestrator.cohereKeysList = _cohereApiKeys.value.filter { it.isNotBlank() }
+        com.example.network.AiOrchestrator.huggingfaceKeysList = _huggingfaceApiKeys.value.filter { it.isNotBlank() }
+
+        // همگام‌سازی آدرس‌های پروکسی ثبت شده
+        val prefs = getApplication<Application>().getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
+        com.example.network.AiOrchestrator.openRouterBaseUrl = prefs.getString("openrouter_proxy_url", "https://openrouter.ai/") ?: "https://openrouter.ai/"
+        com.example.network.AiOrchestrator.openAiBaseUrl = prefs.getString("openai_proxy_url", "https://api.openai.com/") ?: "https://api.openai.com/"
+        com.example.network.AiOrchestrator.groqBaseUrl = prefs.getString("groq_proxy_url", "https://api.groq.com/") ?: "https://api.groq.com/"
+        com.example.network.AiOrchestrator.cohereBaseUrl = prefs.getString("cohere_proxy_url", "https://api.cohere.com/") ?: "https://api.cohere.com/"
+        com.example.network.AiOrchestrator.huggingFaceBaseUrl = prefs.getString("huggingface_proxy_url", "https://api-inference.huggingface.co/") ?: "https://api-inference.huggingface.co/"
     }
 
     fun saveApiKeys(gemini: String, openRouter: String, openAi: String) {
         val geminiList = listOf(gemini, "", "")
         val openRouterList = listOf(openRouter, "", "")
         val openAiList = listOf(openAi, "", "")
-        saveMultiApiKeys(geminiList, openRouterList, openAiList)
+        saveMultiApiKeys(geminiList, openRouterList, openAiList, listOf("", "", ""), listOf("", "", ""), listOf("", "", ""), _geminiProxyUrl.value)
     }
 
-    fun saveMultiApiKeys(gemini: List<String>, openRouter: List<String>, openAi: List<String>) {
+    fun saveMultiApiKeys(
+        gemini: List<String>,
+        openRouter: List<String>,
+        openAi: List<String>,
+        groq: List<String>,
+        cohere: List<String>,
+        huggingFace: List<String>,
+        proxyUrl: String = "https://generativelanguage.googleapis.com/"
+    ) {
         val prefs = getApplication<Application>().getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
         val editor = prefs.edit()
         
-        val gList = (gemini + listOf("", "", "")).take(3)
-        val orList = (openRouter + listOf("", "", "")).take(3)
-        val oaList = (openAi + listOf("", "", "")).take(3)
+        val gList = (gemini.map { it.trim() } + listOf("", "", "")).take(3)
+        val orList = (openRouter.map { it.trim() } + listOf("", "", "")).take(3)
+        val oaList = (openAi.map { it.trim() } + listOf("", "", "")).take(3)
+        val grList = (groq.map { it.trim() } + listOf("", "", "")).take(3)
+        val coList = (cohere.map { it.trim() } + listOf("", "", "")).take(3)
+        val hfList = (huggingFace.map { it.trim() } + listOf("", "", "")).take(3)
 
         for (i in 0..2) {
             editor.putString("gemini_key_${i+1}", gList[i])
             editor.putString("openrouter_key_${i+1}", orList[i])
             editor.putString("openai_key_${i+1}", oaList[i])
+            editor.putString("groq_key_${i+1}", grList[i])
+            editor.putString("cohere_key_${i+1}", coList[i])
+            editor.putString("huggingface_key_${i+1}", hfList[i])
         }
+        editor.putString("gemini_proxy_url", proxyUrl)
         editor.putBoolean("keys_initialized", true)
         editor.apply()
 
         _geminiApiKeys.value = gList
         _openrouterApiKeys.value = orList
         _openaiApiKeys.value = oaList
+        _groqApiKeys.value = grList
+        _cohereApiKeys.value = coList
+        _huggingfaceApiKeys.value = hfList
+        _geminiProxyUrl.value = proxyUrl
 
         _geminiApiKey.value = gList.firstOrNull { it.isNotBlank() } ?: ""
         _openrouterApiKey.value = orList.firstOrNull { it.isNotBlank() } ?: ""
         _openaiApiKey.value = oaList.firstOrNull { it.isNotBlank() } ?: ""
 
+        com.example.network.RetrofitClient.customBaseUrl = proxyUrl
         syncOrchestratorKeys()
 
         viewModelScope.launch {
             logDao.insertLog(
                 ActivityLogEntity(
                     username = "مدیر سیستم",
-                    action = "بروزرسانی موفق لیست ۳ گانه کلیدهای زاپاس پشتیبان API در اندروید",
+                    action = "بروزرسانی موفق لیست کلیدهای اصلی و زاپاس API ارائه‌دهندگان هوش مصنوعی در اندروید",
                     date = getPersianDateNow()
                 )
             )
@@ -854,6 +978,15 @@ class CitizenViewModel(application: Application) : AndroidViewModel(application)
     private val _unifiedOutput = MutableStateFlow("")
     val unifiedOutput = _unifiedOutput.asStateFlow()
 
+    private val _groqOutput = MutableStateFlow("")
+    val groqOutput = _groqOutput.asStateFlow()
+
+    private val _cohereOutput = MutableStateFlow("")
+    val cohereOutput = _cohereOutput.asStateFlow()
+
+    private val _hfOutput = MutableStateFlow("")
+    val hfOutput = _hfOutput.asStateFlow()
+
     private val _isGenerating = MutableStateFlow(false)
     val isGenerating = _isGenerating.asStateFlow()
 
@@ -911,6 +1044,15 @@ class CitizenViewModel(application: Application) : AndroidViewModel(application)
     fun updateUnifiedOutput(output: String) {
         _unifiedOutput.value = output
     }
+
+    fun updateGptOutput(output: String) { _gptOutput.value = output }
+    fun updateClaudeOutput(output: String) { _claudeOutput.value = output }
+    fun updateGeminiOutput(output: String) { _geminiOutput.value = output }
+    fun updateDeepSeekOutput(output: String) { _deepSeekOutput.value = output }
+    fun updateQwenOutput(output: String) { _qwenOutput.value = output }
+    fun updateGroqOutput(output: String) { _groqOutput.value = output }
+    fun updateCohereOutput(output: String) { _cohereOutput.value = output }
+    fun updateHfOutput(output: String) { _hfOutput.value = output }
 
     fun uploadSimulatedFile(filename: String) {
         _uploadedFiles.value = _uploadedFiles.value + filename
@@ -986,22 +1128,43 @@ class CitizenViewModel(application: Application) : AndroidViewModel(application)
     fun generateAIOutputs(userName: String) {
         _isGenerating.value = true
         viewModelScope.launch {
-            // فراخوانی جریان چندمدلی کارشناسی
-            val workflowMap = com.example.network.AiOrchestrator.executeStrategicMultiModelWorkflow(
-                requestType = _requestType.value,
-                caseDescription = _caseDescription.value,
-                plaintiff = _plaintiffName.value,
-                defendant = _defendantName.value,
-                evidence = _suggestedEvidence.value,
-                relief = _requestedRelief.value
-            )
+            // ۱. فراخوانی موازی جریان چندمدلی کارشناسی اصلی و موتور تخصصی اسناد استاندارد با وب‌سرویس‌های رایگان
+            val workflowMapDeferred = async(Dispatchers.IO) {
+                com.example.network.AiOrchestrator.executeStrategicMultiModelWorkflow(
+                    requestType = _requestType.value,
+                    caseDescription = _caseDescription.value,
+                    plaintiff = _plaintiffName.value,
+                    defendant = _defendantName.value,
+                    evidence = _suggestedEvidence.value,
+                    relief = _requestedRelief.value
+                )
+            }
+
+            val freeServicesMapDeferred = async(Dispatchers.IO) {
+                com.example.network.IranianLegalDocumentGeneratorService.generateDocuments(
+                    requestType = _requestType.value,
+                    caseDescription = _caseDescription.value,
+                    plaintiff = _plaintiffName.value,
+                    defendant = _defendantName.value,
+                    evidence = _suggestedEvidence.value,
+                    relief = _requestedRelief.value
+                )
+            }
+
+            val workflowMap = workflowMapDeferred.await()
+            val freeServicesMap = freeServicesMapDeferred.await()
 
             _gptOutput.value = workflowMap["gpt"] ?: ""
             _claudeOutput.value = workflowMap["claude"] ?: ""
             _deepSeekOutput.value = workflowMap["deepseek"] ?: ""
-            _geminiOutput.value = workflowMap["unified"] ?: ""
             _qwenOutput.value = workflowMap["qwen"] ?: ""
             _unifiedOutput.value = workflowMap["unified"] ?: ""
+
+            // اعمال اسناد تولیدی بر اساس پرامپت اختصاصی و الگوهای رسمی ایران
+            _geminiOutput.value = freeServicesMap["gemini"] ?: ""
+            _groqOutput.value = freeServicesMap["groq"] ?: ""
+            _cohereOutput.value = freeServicesMap["cohere"] ?: ""
+            _hfOutput.value = freeServicesMap["hf"] ?: ""
             
             val parsedScore = workflowMap["confidence"]?.toIntOrNull() ?: 89
             _confidenceScore.value = parsedScore
@@ -1010,7 +1173,7 @@ class CitizenViewModel(application: Application) : AndroidViewModel(application)
             _currentStep.value = 7 // برو به مرور نهایی (گام ۷)
             
             // ثبت در رویدادها
-            logDao.insertLog(ActivityLogEntity(username = userName, action = "تولید همزمان چندمدلی لایحه حقوقی ${_requestType.value} با موتور اورکستراتور مستقل", date = "۱۶ خرداد ۱۴۰۵"))
+            logDao.insertLog(ActivityLogEntity(username = userName, action = "تولید همزمان چندمدلی لایحه حقوقی ${_requestType.value} با موتور اورکستراتور مستقل و وب‌سرویس جمینای بومی", date = "۱۶ خرداد ۱۴۰۵"))
         }
     }
 

@@ -20,12 +20,23 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.platform.LocalAutofill
+import androidx.compose.ui.platform.LocalAutofillTree
+import androidx.compose.ui.autofill.AutofillNode
+import androidx.compose.ui.autofill.AutofillType
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.focus.onFocusChanged
 import com.example.ui.theme.*
 import com.example.ui.components.FrostedGlassBackground
+import com.example.ui.components.glassy3D
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.UserRole
 
-@OptIn(ExperimentalAnimationApi::class)
+@OptIn(ExperimentalAnimationApi::class, androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 fun LoginScreen(
     authViewModel: AuthViewModel,
@@ -35,11 +46,39 @@ fun LoginScreen(
     val isPasswordChangeRequired by authViewModel.isPasswordChangeRequired.collectAsState()
     val loginError by authViewModel.loginError.collectAsState()
     val isDark by authViewModel.isDarkTheme.collectAsState()
+    val isDynamicBg by authViewModel.isDynamicBackground.collectAsState()
 
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
     var showCreditsDialog by remember { mutableStateOf(false) }
+
+    var isPasswordVisible by remember { mutableStateOf(false) }
+    var isNewPasswordVisible by remember { mutableStateOf(false) }
+
+    val autofill = LocalAutofill.current
+    val autofillTree = LocalAutofillTree.current
+
+    val usernameAutofillNode = remember {
+        AutofillNode(
+            autofillTypes = listOf(AutofillType.Username),
+            onFill = { username = it }
+        )
+    }
+    val passwordAutofillNode = remember {
+        AutofillNode(
+            autofillTypes = listOf(AutofillType.Password),
+            onFill = { password = it }
+        )
+    }
+
+    DisposableEffect(Unit) {
+        autofillTree += usernameAutofillNode
+        autofillTree += passwordAutofillNode
+        onDispose {
+            // Teardown completed safely
+        }
+    }
 
     // Dynamic Glass Theme attributes
     val surfaceColor = MaterialTheme.colorScheme.surface
@@ -60,7 +99,7 @@ fun LoginScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Theme toggle at the very top of the login screen
+            // Top settings and toggle bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -69,18 +108,39 @@ fun LoginScreen(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = { authViewModel.toggleTheme() },
-                    modifier = Modifier
-                        .testTag("theme_toggle_button")
-                        .background(surfaceColor, RoundedCornerShape(12.dp))
-                        .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (isDark) Icons.Default.Star else Icons.Default.Refresh,
-                        contentDescription = "Theme Toggle",
-                        tint = AccentGold
-                    )
+                    // Modern theme toggle with standard Moon/Sunny symbols
+                    IconButton(
+                        onClick = { authViewModel.toggleTheme() },
+                        modifier = Modifier
+                            .testTag("theme_toggle_button")
+                            .background(surfaceColor, RoundedCornerShape(12.dp))
+                            .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(
+                            imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
+                            contentDescription = "Theme Toggle",
+                            tint = AccentGold
+                        )
+                    }
+
+                    // Key-shaped dynamic/static space background motion toggle
+                    IconButton(
+                        onClick = { authViewModel.toggleDynamicBackground() },
+                        modifier = Modifier
+                            .testTag("background_motion_toggle")
+                            .background(surfaceColor, RoundedCornerShape(12.dp))
+                            .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(
+                            imageVector = if (isDynamicBg) Icons.Default.VpnKey else Icons.Default.VpnKey,
+                            contentDescription = "Background Motion Toggle",
+                            tint = if (isDynamicBg) AccentGold else Color.Gray.copy(alpha = 0.6f)
+                        )
+                    }
                 }
 
                 // Simple placeholder to align
@@ -129,9 +189,7 @@ fun LoginScreen(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clip(RoundedCornerShape(24.dp))
-                        .background(surfaceColor)
-                        .border(1.dp, glassBorderColor, RoundedCornerShape(24.dp))
+                        .glassy3D(cornerRadius = 24.dp, glowColor = primaryAccent.copy(alpha = 0.12f))
                         .padding(24.dp)
                 ) {
                     Column(
@@ -148,40 +206,87 @@ fun LoginScreen(
                                 modifier = Modifier.align(Alignment.End)
                             )
 
-                            OutlinedTextField(
-                                value = username,
-                                onValueChange = { username = it },
-                                placeholder = { Text("نام کاربری یا کدملی", color = onSurfaceColor) },
-                                singleLine = true,
-                                leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = primaryAccent) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("username_input"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = onBgColor,
-                                    unfocusedTextColor = onBgColor,
-                                    focusedBorderColor = primaryAccent,
-                                    unfocusedBorderColor = glassBorderColor
-                                )
-                            )
+                            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    OutlinedTextField(
+                                        value = username,
+                                        onValueChange = { username = it },
+                                        placeholder = { Text("نام کاربری یا کدملی", color = onSurfaceColor) },
+                                        singleLine = true,
+                                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Right),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Text,
+                                            imeAction = androidx.compose.ui.text.input.ImeAction.Next
+                                        ),
+                                        leadingIcon = { Icon(Icons.Default.Person, contentDescription = null, tint = primaryAccent) },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("username_input")
+                                            .onGloballyPositioned { usernameAutofillNode.boundingBox = it.boundsInWindow() }
+                                            .onFocusChanged { focusState ->
+                                                autofill?.let {
+                                                    if (focusState.isFocused) {
+                                                        it.requestAutofillForNode(usernameAutofillNode)
+                                                    } else {
+                                                        it.cancelAutofillForNode(usernameAutofillNode)
+                                                    }
+                                                }
+                                            },
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = onBgColor,
+                                            unfocusedTextColor = onBgColor,
+                                            focusedBorderColor = primaryAccent,
+                                            unfocusedBorderColor = glassBorderColor,
+                                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                                        )
+                                    )
 
-                            OutlinedTextField(
-                                value = password,
-                                onValueChange = { password = it },
-                                placeholder = { Text("رمز عبور", color = onSurfaceColor) },
-                                singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
-                                leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryAccent) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .testTag("password_input"),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedTextColor = onBgColor,
-                                    unfocusedTextColor = onBgColor,
-                                    focusedBorderColor = primaryAccent,
-                                    unfocusedBorderColor = glassBorderColor
-                                )
-                            )
+                                    OutlinedTextField(
+                                        value = password,
+                                        onValueChange = { password = it },
+                                        placeholder = { Text("رمز عبور", color = onSurfaceColor) },
+                                        singleLine = true,
+                                        textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Right),
+                                        keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                            keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                                            imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                                        ),
+                                        visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                                        leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryAccent) },
+                                        trailingIcon = {
+                                            IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Lock,
+                                                    contentDescription = null,
+                                                    tint = if (isPasswordVisible) primaryAccent else primaryAccent.copy(alpha = 0.4f),
+                                                )
+                                            }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .testTag("password_input")
+                                            .onGloballyPositioned { passwordAutofillNode.boundingBox = it.boundsInWindow() }
+                                            .onFocusChanged { focusState ->
+                                                autofill?.let {
+                                                    if (focusState.isFocused) {
+                                                        it.requestAutofillForNode(passwordAutofillNode)
+                                                    } else {
+                                                        it.cancelAutofillForNode(passwordAutofillNode)
+                                                    }
+                                                }
+                                            },
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = onBgColor,
+                                            unfocusedTextColor = onBgColor,
+                                            focusedBorderColor = primaryAccent,
+                                            unfocusedBorderColor = glassBorderColor,
+                                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                                        )
+                                    )
+                                }
+                            }
 
                             if (loginError != null) {
                                 Text(
@@ -265,8 +370,22 @@ fun LoginScreen(
                                 onValueChange = { newPassword = it },
                                 placeholder = { Text("رمز عبور جدید (حداقل ۶ کاراکتر)", color = onSurfaceColor) },
                                 singleLine = true,
-                                visualTransformation = PasswordVisualTransformation(),
+                                textStyle = LocalTextStyle.current.copy(textAlign = TextAlign.Right),
+                                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                                    keyboardType = androidx.compose.ui.text.input.KeyboardType.Password,
+                                    imeAction = androidx.compose.ui.text.input.ImeAction.Done
+                                ),
+                                visualTransformation = if (isNewPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                                 leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null, tint = primaryAccent) },
+                                trailingIcon = {
+                                    IconButton(onClick = { isNewPasswordVisible = !isNewPasswordVisible }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Lock,
+                                            contentDescription = "نمایش رمز عبور جدید",
+                                            tint = if (isNewPasswordVisible) primaryAccent else primaryAccent.copy(alpha = 0.4f)
+                                        )
+                                    }
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .testTag("new_password_input"),
@@ -274,7 +393,9 @@ fun LoginScreen(
                                     focusedTextColor = onBgColor,
                                     unfocusedTextColor = onBgColor,
                                     focusedBorderColor = primaryAccent,
-                                    unfocusedBorderColor = glassBorderColor
+                                    unfocusedBorderColor = glassBorderColor,
+                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
                                 )
                             )
 
@@ -326,8 +447,7 @@ fun LoginScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .background(surfaceColor, RoundedCornerShape(12.dp))
-                                .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
+                                .glassy3D(cornerRadius = 12.dp)
                                 .padding(8.dp),
                             contentAlignment = Alignment.Center
                         ) {
@@ -351,9 +471,9 @@ fun LoginScreen(
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { showCreditsDialog = true }
-                        .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
-                    colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.85f))
+                        .glassy3D(cornerRadius = 16.dp, glowColor = AccentGold.copy(alpha = 0.08f))
+                        .clickable { showCreditsDialog = true },
+                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                 ) {
                     Column(
                         modifier = Modifier

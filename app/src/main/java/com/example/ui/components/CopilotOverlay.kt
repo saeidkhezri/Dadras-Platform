@@ -24,6 +24,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerInputChange
 import kotlin.math.roundToInt
@@ -130,13 +133,26 @@ fun CopilotOverlay(
                     }
                     .size(50.dp)
                     .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = {
-                                dragAccumulation = 0f
-                            },
-                            onDragEnd = {
-                                // در صورتی که کاربر اصلاً درگ نکرده یا مسیر ناچیز بوده، آن را لمس کامل (CLICK) در نظر می‌گیریم
-                                if (dragAccumulation < with(density) { 15.dp.toPx() }) {
+                        try {
+                            awaitEachGesture {
+                                val down = awaitFirstDown()
+                                var dragAccum = 0f
+                                var change: PointerInputChange? = null
+                                do {
+                                    val event = awaitPointerEvent()
+                                    change = event.changes.firstOrNull()
+                                    if (change != null && change.pressed) {
+                                        val dragAmount = change.positionChange()
+                                        if (dragAmount.getDistance() > 0f) {
+                                            offsetX += dragAmount.x
+                                            offsetY += dragAmount.y
+                                            dragAccum += dragAmount.getDistance()
+                                            change.consume()
+                                        }
+                                    }
+                                } while (change != null && change.pressed)
+
+                                if (dragAccum < 15f) {
                                     copilotViewModel.toggleCopilot()
                                 } else {
                                     // چسبیدن خودکار به نزدیک‌ترین لبه عمودی چپ یا راست به صورت نیم‌دایره
@@ -145,27 +161,10 @@ fun CopilotOverlay(
                                     val middleScreen = maxWidthPx / 2f
                                     offsetX = if (offsetX + with(density) { 25.dp.toPx() } < middleScreen) leftEdgeX else rightEdgeX
                                 }
-                            },
-                            onDragCancel = {
-                                val leftEdgeX = -with(density) { 25.dp.toPx() }
-                                val rightEdgeX = maxWidthPx - with(density) { 25.dp.toPx() }
-                                val middleScreen = maxWidthPx / 2f
-                                offsetX = if (offsetX + with(density) { 25.dp.toPx() } < middleScreen) leftEdgeX else rightEdgeX
-                            },
-                            onDrag = { change: PointerInputChange, dragAmount: Offset ->
-                                change.consume()
-                                offsetX += dragAmount.x
-                                offsetY += dragAmount.y
-
-                                // انباشت طول درگ
-                                dragAccumulation += kotlin.math.abs(dragAmount.x) + kotlin.math.abs(dragAmount.y)
-
-                                // جلوگیری از خروج دکمه از مرزهای بالا و پایین صفحه
-                                val minY = with(density) { 40.dp.toPx() }
-                                val maxY = maxHeightPx - with(density) { 100.dp.toPx() }
-                                offsetY = offsetY.coerceIn(minY, maxY)
                             }
-                        )
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
                     }
                     .testTag("floating_copilot_button"),
                 contentAlignment = Alignment.Center
@@ -195,13 +194,8 @@ fun CopilotOverlay(
                         .border(1.5.dp, Color.White.copy(alpha = 0.5f), CircleShape)
                 )
 
-                // آیکون ربات همیار حقوقی دادرس (همواره ثابت و خوانا)
-                Icon(
-                    imageVector = Icons.Default.Star,
-                    contentDescription = "همیار حقوقی دادرس",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
+                // آیکون هوشمند فوق‌لوکس، متحرک و نوین همیار دادرس
+                LuxuryAnimatedCopilotIcon(colorShiftPhase, pulseScale)
             }
         }
 
@@ -327,12 +321,9 @@ fun CopilotOverlay(
                                     }
                                 }
                             } else if (responseText.isNotBlank()) {
-                                Text(
+                                ParsedMarkdownText(
                                     text = responseText,
-                                    style = Typography.bodyMedium,
-                                    color = TextPrimaryFarsi,
-                                    textAlign = TextAlign.Right,
-                                    lineHeight = 22.sp
+                                    textColor = TextPrimaryFarsi
                                 )
                             } else {
                                 Column(
@@ -396,5 +387,83 @@ fun CopilotOverlay(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun LuxuryAnimatedCopilotIcon(colorShiftPhase: Float, pulseScale: Float) {
+    androidx.compose.foundation.Canvas(modifier = Modifier.size(36.dp)) {
+        val width = size.width
+        val height = size.height
+        val center = androidx.compose.ui.geometry.Offset(width / 2f, height / 2f)
+        
+        // ۱. رسم هاله نورانی طلایی لوکس در پس‌زمینه با شفافیت پویا
+        val pulseIntensity = (pulseScale - 0.95f) / 0.1f // بین ۰ تا ۱
+        val glowRadius = (width / 2f) * (0.8f + pulseIntensity * 0.2f)
+        drawCircle(
+            brush = androidx.compose.ui.graphics.Brush.radialGradient(
+                colors = listOf(
+                    Color(0xFFFFD700).copy(alpha = 0.4f * (1.2f - pulseScale)),
+                    Color(0xFFD4AF37).copy(alpha = 0.1f * (1.2f - pulseScale)),
+                    Color.Transparent
+                ),
+                center = center,
+                radius = glowRadius
+            ),
+            radius = glowRadius,
+            center = center
+        )
+
+        // ۲. رینگ چرخان الماس‌گونه بیرونی (اوربیت دور هسته هوش مصنوعی)
+        val ringRadius = (width / 2.3f)
+        val phaseRad = Math.toRadians(colorShiftPhase.toDouble()).toFloat()
+        
+        // رسم خطوط فرضی مدار بصورت گرادیان طلایی
+        drawCircle(
+            color = Color(0xFFD4AF37).copy(alpha = 0.3f),
+            radius = ringRadius,
+            center = center,
+            style = androidx.compose.ui.graphics.drawscope.Stroke(
+                width = 1.5.dp.toPx(),
+                pathEffect = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(10f, 15f), phaseRad * 20f)
+            )
+        )
+
+        // ۳. رسم ستون قضاوت و تعادل قانون (فرشته عدالت با ترکیب رباتیک هوشمند)
+        // یک المان نگینی درخشان لوکس در مرکز (ستاره یا الماس ۴ پر با رنگ طلایی پرمیوم)
+        val path = androidx.compose.ui.graphics.Path().apply {
+            moveTo(center.x, center.y - (height * 0.35f) * pulseScale)
+            quadraticTo(center.x, center.y, center.x + (width * 0.35f) * pulseScale, center.y)
+            quadraticTo(center.x, center.y, center.x, center.y + (height * 0.35f) * pulseScale)
+            quadraticTo(center.x, center.y, center.x - (width * 0.35f) * pulseScale, center.y)
+            quadraticTo(center.x, center.y, center.x, center.y - (height * 0.35f) * pulseScale)
+            close()
+        }
+        
+        drawPath(
+            path = path,
+            brush = androidx.compose.ui.graphics.Brush.linearGradient(
+                colors = listOf(
+                    Color(0xFFFFFFFF), // هسته سفید درخشان
+                    Color(0xFFFFD700), // طلایی درخشان ۲۴ عیار
+                    Color(0xFFB8860B)  // طلایی تیره مجلل
+                )
+            )
+        )
+
+        // ۴. نگین‌های درخشان ماهواره‌ای چرخان دور مرکز هوشمند
+        val satX = center.x + ringRadius * kotlin.math.cos(phaseRad)
+        val satY = center.y + ringRadius * kotlin.math.sin(phaseRad)
+        drawCircle(
+            color = Color(0xFFFFFFFF),
+            radius = 3.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(satX, satY)
+        )
+        // افکت درخشش دور قمر چرخان
+        drawCircle(
+            color = Color(0xFFFFD700).copy(alpha = 0.4f),
+            radius = 6.dp.toPx(),
+            center = androidx.compose.ui.geometry.Offset(satX, satY)
+        )
     }
 }

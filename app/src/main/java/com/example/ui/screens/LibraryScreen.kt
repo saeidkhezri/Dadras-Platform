@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import com.example.ui.theme.*
 import com.example.ui.components.FrostedGlassBackground
+import com.example.ui.components.glassy3D
 import com.example.ui.components.PersianFirstUtils
 import com.example.viewmodel.CitizenViewModel
 import androidx.compose.foundation.shape.CircleShape
@@ -189,7 +190,9 @@ fun LibraryScreen(
                             focusedTextColor = onBgColor,
                             unfocusedTextColor = onBgColor,
                             focusedBorderColor = AccentGold,
-                            unfocusedBorderColor = glassBorderColor
+                            unfocusedBorderColor = glassBorderColor,
+                            focusedContainerColor = MaterialTheme.colorScheme.surface,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
                         )
                     )
 
@@ -203,9 +206,11 @@ fun LibraryScreen(
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .background(if (isSelected) AccentGold.copy(alpha = 0.25f) else surfaceColor)
-                                    .border(1.dp, if (isSelected) AccentGold else glassBorderColor, RoundedCornerShape(8.dp))
+                                    .glassy3D(
+                                        cornerRadius = 8.dp,
+                                        borderColor = if (isSelected) AccentGold else glassBorderColor,
+                                        glowColor = if (isSelected) AccentGold.copy(alpha = 0.12f) else Color.Transparent
+                                    )
                                     .clickable { selectedCategory = cat }
                                     .padding(vertical = 8.dp),
                                 contentAlignment = Alignment.Center
@@ -265,8 +270,8 @@ fun LibraryScreen(
                                 Card(
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
-                                    colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                        .glassy3D(cornerRadius = 16.dp, glowColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)),
+                                    colors = CardDefaults.cardColors(containerColor = Color.Transparent)
                                 ) {
                                     Column(
                                         modifier = Modifier
