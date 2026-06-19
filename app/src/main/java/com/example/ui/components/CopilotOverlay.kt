@@ -467,3 +467,105 @@ fun LuxuryAnimatedCopilotIcon(colorShiftPhase: Float, pulseScale: Float) {
         )
     }
 }
+
+@Composable
+fun ParsedMarkdownText(
+    text: String,
+    textColor: Color,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        val lines = text.split("\n")
+        for (line in lines) {
+            val trimmed = line.trim()
+            if (trimmed.isEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                continue
+            }
+            when {
+                trimmed.startsWith("### ") || trimmed.startsWith("###") -> {
+                    val rawText = if (trimmed.startsWith("### ")) trimmed.removePrefix("### ") else trimmed.removePrefix("###")
+                    Text(
+                        text = rawText,
+                        style = Typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = AccentGold),
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                trimmed.startsWith("## ") || trimmed.startsWith("##") -> {
+                    val rawText = if (trimmed.startsWith("## ")) trimmed.removePrefix("## ") else trimmed.removePrefix("##")
+                    Text(
+                        text = rawText,
+                        style = Typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = AccentGold),
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                trimmed.startsWith("# ") || trimmed.startsWith("#") -> {
+                    val rawText = if (trimmed.startsWith("# ")) trimmed.removePrefix("# ") else trimmed.removePrefix("#")
+                    Text(
+                        text = rawText,
+                        style = Typography.titleLarge.copy(fontSize = 22.sp, fontWeight = FontWeight.Bold, color = AccentGold),
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                trimmed.startsWith("* ") || trimmed.startsWith("*") || trimmed.startsWith("- ") || trimmed.startsWith("-") -> {
+                    val rawText = when {
+                        trimmed.startsWith("* ") -> trimmed.removePrefix("* ")
+                        trimmed.startsWith("*") -> trimmed.removePrefix("*")
+                        trimmed.startsWith("- ") -> trimmed.removePrefix("- ")
+                        else -> trimmed.removePrefix("-")
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = parseBoldMarkdown(rawText),
+                            style = Typography.bodyMedium.copy(color = textColor),
+                            textAlign = TextAlign.Right,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "•",
+                            style = Typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = AccentGold)
+                        )
+                    }
+                }
+                else -> {
+                    Text(
+                        text = parseBoldMarkdown(trimmed),
+                        style = Typography.bodyMedium.copy(color = textColor),
+                        textAlign = TextAlign.Right,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun parseBoldMarkdown(text: String): androidx.compose.ui.text.AnnotatedString {
+    return androidx.compose.ui.text.buildAnnotatedString {
+        val parts = text.split("**")
+        var isBold = false
+        for (part in parts) {
+            if (isBold) {
+                pushStyle(androidx.compose.ui.text.SpanStyle(fontWeight = FontWeight.Bold, color = AccentGold))
+                append(part)
+                pop()
+            } else {
+                append(part)
+            }
+            isBold = !isBold
+        }
+    }
+}

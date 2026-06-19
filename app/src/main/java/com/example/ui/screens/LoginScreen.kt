@@ -320,33 +320,6 @@ fun LoginScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
-
-                            // Dynamic Helper
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 8.dp)
-                                    .background(if (isDark) GlassSurfaceLight else Color(0x0F000000), RoundedCornerShape(8.dp))
-                                    .padding(8.dp)
-                            ) {
-                                Text(
-                                    text = "راهنمای دسترسی کاربران:",
-                                    color = AccentGold,
-                                    style = Typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Right
-                                )
-                                Text(
-                                    text = "ورود کاربران در سه نقش مدیر سیستم، کاربر عادی ویژه و کارشناسان حقوقی انجام می‌پذیرد. مشخصات ورود پیش‌فرض کاربران در دفترچه راهنما ثبت شده است.",
-                                    color = onSurfaceColor,
-                                    style = Typography.labelSmall,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Right,
-                                    lineHeight = 16.sp
-                                )
-                            }
-
                         } else {
                             // Enforce Password Change for Administrator
                             Text(

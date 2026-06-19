@@ -91,98 +91,172 @@ fun FrostedGlassBackground(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF030814)) // Base space dark color
+            .background(if (isLight) Color(0xFFF9FBFD) else Color(0xFF020204)) // Base colors
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .drawBehind {
-                    // 1. Draw Persian Desert Lapis Lazuli Luxury Gradient
-                    drawRect(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF020713), // Deep space top
-                                Color(0xFF0A183D), // Noble Persian Lapis Lazuli
-                                Color(0xFF040A1A)  // Dark horizon bottom
-                            )
-                        )
-                    )
-
-                    // 2. Cosmic Nebulae Orbs (3D ambient clouds)
-                    val nebulaPhase = if (isDynamic) (animPhase * 0.015f) else 0f
-                    
-                    // Lapis Lazuli Soft Light
-                    val n1X = size.width * (0.3f + 0.12f * sin(nebulaPhase.toDouble()).toFloat())
-                    val n1Y = size.height * (0.25f + 0.08f * cos(nebulaPhase.toDouble()).toFloat())
-                    val n1Radius = size.minDimension * 0.9f
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFF2E5BFF).copy(alpha = 0.15f),
-                                Color(0xFF102875).copy(alpha = 0.08f),
-                                Color.Transparent
-                            ),
-                            center = Offset(n1X, n1Y),
-                            radius = n1Radius
-                        ),
-                        radius = n1Radius,
-                        center = Offset(n1X, n1Y)
-                    )
-
-                    // Desert Warm Ochre Glow (represents soft starlight glow on Persian deserts)
-                    val n2X = size.width * (0.7f + 0.10f * cos(nebulaPhase.toDouble() + 1.5).toFloat())
-                    val n2Y = size.height * (0.7f + 0.12f * sin(nebulaPhase.toDouble() + 1.5).toFloat())
-                    val n2Radius = size.minDimension * 0.8f
-                    drawCircle(
-                        brush = Brush.radialGradient(
-                            colors = listOf(
-                                Color(0xFFC5A880).copy(alpha = 0.08f), // Luxury Soft Amber
-                                Color.Transparent
-                            ),
-                            center = Offset(n2X, n2Y),
-                            radius = n2Radius
-                        ),
-                        radius = n2Radius,
-                        center = Offset(n2X, n2Y)
-                    )
-
-                    // 3. Render 3D Parallax Twinkling Stars
-                    stars.forEach { star ->
-                        // Slow 3D Parallax Drift
-                        val driftX = if (isDynamic) (animPhase * 0.15f * star.depth) else 0f
-                        val driftY = if (isDynamic) (animPhase * 0.06f * star.depth) else 0f
-
-                        var px = (star.xRatio * size.width + driftX) % size.width
-                        if (px < 0) px += size.width
-                        var py = (star.yRatio * size.height + driftY) % size.height
-                        if (py < 0) py += size.height
-
-                        // Elegant Eye-Pleasing Twinkling
-                        val starOpacity = if (isDynamic) {
-                            val twinkle = sin((animPhase * 0.05f * star.twinkleSpeed) + star.twinklePhase)
-                            val normalizedTwinkle = (twinkle + 1f) / 2f // [0f .. 1f]
-                            star.baseOpacity * (0.35f + 0.65f * normalizedTwinkle)
-                        } else {
-                            star.baseOpacity
-                        }
-
-                        drawCircle(
-                            color = Color.White.copy(alpha = starOpacity),
-                            radius = star.size,
-                            center = Offset(px, py)
-                        )
-                    }
-
-                    // 4. If Light Theme is active, overlay a soft satin-white sheen so starlight is seen through silk mist
                     if (isLight) {
+                        // 1. LITE THEME: 3D Luxury Pearl & Alabaster Gold-Ochre Gradient
                         drawRect(
                             brush = Brush.verticalGradient(
                                 colors = listOf(
-                                    Color(0xE6EBEFF5), // Silk white with soft lapis reflection
-                                    Color(0xCCF1F4FA)
+                                    Color(0xFFF6F8FC), // Alabaster Ice top
+                                    Color(0xFFFDF7EE), // Pearl Cream Warm silk middle
+                                    Color(0xFFE9EDF5)  // Polished Alabaster bottom
                                 )
                             )
                         )
+
+                        // 2. Translucent Drifting Soft Glass Orbs (Tactile 3D Depth)
+                        val orbPhase = if (isDynamic) (animPhase * 0.01f) else 0f
+                        
+                        // Pearl-Gold Luxury Orb
+                        val orb1X = size.width * (0.8f + 0.10f * sin(orbPhase.toDouble()).toFloat())
+                        val orb1Y = size.height * (0.2f + 0.08f * cos(orbPhase.toDouble()).toFloat())
+                        val orb1Radius = size.minDimension * 0.7f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFF5DDA7).copy(alpha = 0.28f), // Soft amber-gold
+                                    Color(0xFFFCECD5).copy(alpha = 0.12f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(orb1X, orb1Y),
+                                radius = orb1Radius
+                            ),
+                            radius = orb1Radius,
+                            center = Offset(orb1X, orb1Y)
+                        )
+
+                        // Apple Lapis-Mist Soft Blue Orb
+                        val orb2X = size.width * (0.25f + 0.12f * cos(orbPhase.toDouble() + 2.0).toFloat())
+                        val orb2Y = size.height * (0.75f + 0.10f * sin(orbPhase.toDouble() + 2.0).toFloat())
+                        val orb2Radius = size.minDimension * 0.75f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF8EB1FF).copy(alpha = 0.22f), // Royal lapis sky blue
+                                    Color(0xFFE3ECFF).copy(alpha = 0.08f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(orb2X, orb2Y),
+                                radius = orb2Radius
+                            ),
+                            radius = orb2Radius,
+                            center = Offset(orb2X, orb2Y)
+                        )
+
+                        // 3. Thin Concentric Vector Lines (Embodies premium certificates / legal seals)
+                        val lineBrush = Brush.linearGradient(
+                            colors = listOf(Color(0xFFD4AF37).copy(alpha = 0.18f), Color.Transparent)
+                        )
+                        drawCircle(
+                            brush = lineBrush,
+                            radius = size.minDimension * 0.4f,
+                            center = Offset(size.width * 0.9f, size.height * 0.1f),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx())
+                        )
+                        drawCircle(
+                            brush = lineBrush,
+                            radius = size.minDimension * 0.42f,
+                            center = Offset(size.width * 0.9f, size.height * 0.1f),
+                            style = androidx.compose.ui.graphics.drawscope.Stroke(width = 0.8.dp.toPx())
+                        )
+
+                    } else {
+                        // 1. DARK THEME: SORA2-inspired deep slate-void obsidian black
+                        drawRect(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color(0xFF030205), // Deep void top
+                                    Color(0xFF08070D), // Midnight slate middle
+                                    Color(0xFF010102)  // Absolute black bottom
+                                )
+                            )
+                        )
+
+                        // 2. Redesigned Fluid Shifting Neon Aurora Waves (Sora2 Premium style)
+                        val shiftPhase = if (isDynamic) (animPhase * 0.012f) else 0f
+                        
+                        // Wave 1: SORA Sunset Crimson/Rose fluid wave (hot, creative AI energy)
+                        val s1X = size.width * (0.4f + 0.15f * sin(shiftPhase.toDouble()).toFloat())
+                        val s1Y = size.height * (0.3f + 0.10f * cos(shiftPhase.toDouble()).toFloat())
+                        val s1Radius = size.minDimension * 0.95f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFFC1B65).copy(alpha = 0.14f), // Intense Rose-Neon
+                                    Color(0xFF5C102C).copy(alpha = 0.04f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(s1X, s1Y),
+                                radius = s1Radius
+                            ),
+                            radius = s1Radius,
+                            center = Offset(s1X, s1Y)
+                        )
+
+                        // Wave 2: SORA Deep Cobalt/Blue flow (focused reasoning & law precision)
+                        val s2X = size.width * (0.15f + 0.10f * cos(shiftPhase.toDouble() + 1.2).toFloat())
+                        val s2Y = size.height * (0.7f + 0.14f * sin(shiftPhase.toDouble() + 1.2).toFloat())
+                        val s2Radius = size.minDimension * 1.1f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFF1648FF).copy(alpha = 0.12f), // Royal Purple-Blue Glow
+                                    Color(0xFF05124D).copy(alpha = 0.03f),
+                                    Color.Transparent
+                                ),
+                                center = Offset(s2X, s2Y),
+                                radius = s2Radius
+                            ),
+                            radius = s2Radius,
+                            center = Offset(s2X, s2Y)
+                        )
+
+                        // Wave 3: SORA Sovereign Golden Sunrise (equity, justice, majesty representation)
+                        val s3X = size.width * (0.85f + 0.12f * sin(shiftPhase.toDouble() + 2.5).toFloat())
+                        val s3Y = size.height * (0.8f + 0.08f * cos(shiftPhase.toDouble() + 2.5).toFloat())
+                        val s3Radius = size.minDimension * 0.8f
+                        drawCircle(
+                            brush = Brush.radialGradient(
+                                colors = listOf(
+                                    Color(0xFFFF9E1B).copy(alpha = 0.10f), // Premium Saffron-Orange/Amber
+                                    Color.Transparent
+                                ),
+                                center = Offset(s3X, s3Y),
+                                radius = s3Radius
+                            ),
+                            radius = s3Radius,
+                            center = Offset(s3X, s3Y)
+                        )
+
+                        // 3. Elegant 3D Parallax Twinkling Stars
+                        stars.forEach { star ->
+                            val driftX = if (isDynamic) (animPhase * 0.16f * star.depth) else 0f
+                            val driftY = if (isDynamic) (animPhase * 0.05f * star.depth) else 0f
+
+                            var px = (star.xRatio * size.width + driftX) % size.width
+                            if (px < 0) px += size.width
+                            var py = (star.yRatio * size.height + driftY) % size.height
+                            if (py < 0) py += size.height
+
+                            val starOpacity = if (isDynamic) {
+                                val twinkle = sin((animPhase * 0.045f * star.twinkleSpeed) + star.twinklePhase)
+                                val normalizedTwinkle = (twinkle + 1f) / 2f
+                                star.baseOpacity * (0.3f + 0.7f * normalizedTwinkle)
+                            } else {
+                                star.baseOpacity * 0.8f
+                            }
+
+                            drawCircle(
+                                color = Color.White.copy(alpha = starOpacity),
+                                radius = star.size,
+                                center = Offset(px, py)
+                            )
+                        }
                     }
                 }
         )

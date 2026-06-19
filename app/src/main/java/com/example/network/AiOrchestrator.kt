@@ -176,6 +176,53 @@ object AiOrchestrator {
     private val _auditLogs = MutableStateFlow<List<AuditEvent>>(emptyList())
     val auditLogs = _auditLogs.asStateFlow()
 
+    fun loadKeysFromPrefs(context: Context) {
+        val prefs = context.getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE) ?: return
+        
+        val g1 = prefs.getString("gemini_key_1", "") ?: ""
+        val g2 = prefs.getString("gemini_key_2", "") ?: ""
+        val g3 = prefs.getString("gemini_key_3", "") ?: ""
+        
+        val o1 = prefs.getString("openai_key_1", "") ?: ""
+        val o2 = prefs.getString("openai_key_2", "") ?: ""
+        val o3 = prefs.getString("openai_key_3", "") ?: ""
+        
+        val or1 = prefs.getString("openrouter_key_1", "") ?: ""
+        val or2 = prefs.getString("openrouter_key_2", "") ?: ""
+        val or3 = prefs.getString("openrouter_key_3", "") ?: ""
+        
+        val gr1 = prefs.getString("groq_key_1", "") ?: ""
+        val gr2 = prefs.getString("groq_key_2", "") ?: ""
+        val gr3 = prefs.getString("groq_key_3", "") ?: ""
+        
+        val co1 = prefs.getString("cohere_key_1", "") ?: ""
+        val co2 = prefs.getString("cohere_key_2", "") ?: ""
+        val co3 = prefs.getString("cohere_key_3", "") ?: ""
+        
+        val hf1 = prefs.getString("huggingface_key_1", "") ?: ""
+        val hf2 = prefs.getString("huggingface_key_2", "") ?: ""
+        val hf3 = prefs.getString("huggingface_key_3", "") ?: ""
+        
+        adminGeminiKey = g1.ifBlank { g2.ifBlank { g3 } }
+        adminOpenAiKey = o1.ifBlank { o2.ifBlank { o3 } }
+        adminOpenRouterKey = or1.ifBlank { or2.ifBlank { or3 } }
+        
+        geminiKeysList = listOf(g1, g2, g3).filter { it.isNotBlank() }
+        openaiKeysList = listOf(o1, o2, o3).filter { it.isNotBlank() }
+        openrouterKeysList = listOf(or1, or2, or3).filter { it.isNotBlank() }
+        groqKeysList = listOf(gr1, gr2, gr3).filter { it.isNotBlank() }
+        cohereKeysList = listOf(co1, co2, co3).filter { it.isNotBlank() }
+        huggingfaceKeysList = listOf(hf1, hf2, hf3).filter { it.isNotBlank() }
+        
+        openRouterBaseUrl = prefs.getString("openrouter_proxy_url", "https://openrouter.ai/") ?: "https://openrouter.ai/"
+        openAiBaseUrl = prefs.getString("openai_proxy_url", "https://api.openai.com/") ?: "https://api.openai.com/"
+        groqBaseUrl = prefs.getString("groq_proxy_url", "https://api.groq.com/") ?: "https://api.groq.com/"
+        cohereBaseUrl = prefs.getString("cohere_proxy_url", "https://api.cohere.com/") ?: "https://api.cohere.com/"
+        huggingFaceBaseUrl = prefs.getString("huggingface_proxy_url", "https://api-inference.huggingface.co/") ?: "https://api-inference.huggingface.co/"
+        
+        logAuditEvent("SYSTEM_KEYS_LOADED", "کلیدهای ارائه‌دهندگان هوش مصنوعی با موفقیت از حافظه ماندگار بازیابی و بارگذاری شدند.")
+    }
+
     init {
         logAuditEvent("SYSTEM_STARTUP", "هسته هوش مستقل اورکستراتور با ابزارهای امنیتی راه‌اندازی شد.")
     }
@@ -318,6 +365,7 @@ object AiOrchestrator {
         val request = okhttp3.Request.Builder()
             .url(finalUrl)
             .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("X-AI-Provider", "openrouter")
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .addHeader("HTTP-Referer", "https://ai.studio/build")
@@ -364,6 +412,7 @@ object AiOrchestrator {
         val request = okhttp3.Request.Builder()
             .url(finalUrl)
             .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("X-AI-Provider", "openai")
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .build()
@@ -407,6 +456,7 @@ object AiOrchestrator {
         val request = okhttp3.Request.Builder()
             .url(finalUrl)
             .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("X-AI-Provider", "groq")
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .build()
@@ -437,6 +487,7 @@ object AiOrchestrator {
         val request = okhttp3.Request.Builder()
             .url(finalUrl)
             .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("X-AI-Provider", "cohere")
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .build()
@@ -469,6 +520,7 @@ object AiOrchestrator {
         val request = okhttp3.Request.Builder()
             .url(finalUrl)
             .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("X-AI-Provider", "huggingface")
             .addHeader("Authorization", "Bearer $apiKey")
             .addHeader("Content-Type", "application/json")
             .build()
@@ -659,17 +711,59 @@ object AiOrchestrator {
     ): Map<String, String> = withContext(Dispatchers.IO) {
         
         val anonymizedDesc = anonymizeText(caseDescription)
+        val evidenceText = if (evidence.isNotEmpty()) evidence.joinToString("، ") else "مدارک استنادی پیوست پرونده"
 
         logAuditEvent("WORKFLOW_START", "آغاز جریان کار هوشمند چندمدلی برای نوع درخواست $requestType")
         
         // Step 1: Generate independent outputs (GPT & Claude)
         logAuditEvent("WORKFLOW_STEP_1", "گام ۱: دریافت خروجی مدل پایه عقلایی و استنباطی")
-        val rawGpt = executeWithFailover("GPT-4o Enterprise", "نگارش اولیه لایحه $requestType با مستندات: ${evidence.joinToString()} و کالبد متنی: $anonymizedDesc", "دستیار قضایی تراز اول")
-        val rawClaude = executeWithFailover("Claude 3.5 Sonnet", "نگارش لایحه $requestType عمیق برای ارزیابی دیوان عالی: $anonymizedDesc", "دستیار عقلایی")
+        
+        val gptPrompt = """
+            به عنوان وکیل ارشد تراز اول دادگستری ایران، نگارش اولیه یک سند حقوقی با مشخصات زیر را تدوین کنید:
+            - نوع سند حقوقی: $requestType
+            - خواهان/شاکی: $plaintiff
+            - خوانده/مشتکی‌عنه: $defendant
+            - خواسته/موضوع جرم: $relief
+            - دلایل و منضمات: $evidenceText
+            
+            شرح واقعه و کالبد متنی پرونده:
+            $anonymizedDesc
+            
+            لطفاً مستنداً به قوانین موضوعه ایران (از جمله قانون مدنی و آیین دادرسی مدنی)، متنی جامع، مستدل، بلیغ و به زبان رسمی بنویسید.
+        """.trimIndent()
+
+        val claudePrompt = """
+            به عنوان دکترین حقوقی و کارشناس عالی قضایی، ابعاد مادی و معنوی دفاع را در سند حقوقی زیر به زبان فارسی تدوین کنید:
+            - نوع سند حقوقی: $requestType
+            - خواهان/شاکی: $plaintiff
+            - خوانده/مشتکی‌عنه: $defendant
+            - خواسته/موضوع جرم: $relief
+            - شواهد و براهین: $evidenceText
+            
+            شرح واقعه پرونده:
+            $anonymizedDesc
+            
+            رویکرد نگارشی را بر پایه تحلیل عمیق فقهی و حقوقی، با استناد صریح به مواد قانونی و با هدف اقناع قاضی پرونده بر اساس موازین دادرسی عادلانه قرار دهید.
+        """.trimIndent()
+
+        val rawGpt = executeWithFailover("GPT-4o Enterprise", gptPrompt, "دستیار قضایی تراز اول")
+        val rawClaude = executeWithFailover("Claude 3.5 Sonnet", claudePrompt, "دستیار عقلایی")
 
         // Step 2: Run legal verification (DeepSeek)
         logAuditEvent("WORKFLOW_STEP_2", "گام ۲: بررسی انطباق با مواد مدنی و کیفری مراجع عالی توسط DeepSeek")
-        val verification = executeWithFailover("DeepSeek Llama-3", "آیا متن لایحه‌های تولیدی با قانون اساسی و مدنی کشور ناسازگار است؟ متن: $rawGpt $rawClaude", "بازبین انطباق")
+        
+        val verificationPrompt = """
+            به عنوان بازرس انطباق حقوقی و قاضی ناظر دیوان عالی کشور، متون نگارش شده توسط دو دستیار را بررسی فرما و هرگونه مغایرت قانونی، اشتباه نگارشی یا لغزش حقوقی را تبیین کن:
+            متن لایحه اول (GPT):
+            $rawGpt
+            
+            متن لایحه دوم (Claude):
+            $rawClaude
+            
+            موضوع خواسته پرونده: $relief
+        """.trimIndent()
+
+        val verification = executeWithFailover("DeepSeek Llama-3", verificationPrompt, "بازبین انطباق")
 
         // Step 3 & 4: Contradiction & Hallucination detection
         logAuditEvent("WORKFLOW_STEP_3_4", "گام ۳ و ۴: پایش واگرایی‌ها و ریسک‌های شبیه‌سازی نادرست قوانین")
@@ -677,7 +771,29 @@ object AiOrchestrator {
 
         // Step 5: Run meta judge (Qwen)
         logAuditEvent("WORKFLOW_STEP_5", "گام ۵: ارزیابی ارجحیت رویکرد و داوری نهایی توسط Qwen")
-        val metaDecision = executeWithFailover("Qwen-2.5-72B", "به عنوان داور ارشد حقوقی، لایحه‌های تولید شده را ادغام، ویرایش و متنی یکپارچه شامل عمیق‌ترین مفاد تولید کن. لایحه ۱: $rawGpt. لایحه ۲: $rawClaude. بازخورد تصحیحی: $verification", "داور هوشمند")
+        
+        val qwenPrompt = """
+            به عنوان داور برتر هوشمند عدالت الکترونیک (Meta Judge)، شما مسئول تلفیق و یکپارچه‌ساز نهایی سند حقوقی بومی ایران هستید. 
+            با ترکیب بهترین و متقن‌ترین استدلال‌های حقوقی لایحه اول و دوم، و اعمال تصحیحات قانونی بازرس ناظر، یک سند حقوقی بی‌پایانی منقح، جامع، قانونمند و بدون ابهام خلق کنید.
+            
+            - نوع سند حقوقی: $requestType
+            - خواهان/شاکی: $plaintiff
+            - خوانده/مشتکی‌عنه: $defendant
+            - خواسته/موضوع جرم: $relief
+            
+            لایحه اول (GPT):
+            $rawGpt
+            
+            لایحه دوم (Claude):
+            $rawClaude
+            
+            بازخورد ناظر (DeepSeek):
+            $verification
+            
+            متن نهایی سند حقوقی کاملاً یکپارچه و آماده تقدیم به مراجع قضایی جمهوری اسلامی ایران به فارسی بلیغ و منقح باشد، بدون وجود هیچ‌گونه توضیح یا توضیح تکمیلی در ابتدا یا انتهای خروجی.
+        """.trimIndent()
+
+        val metaDecision = executeWithFailover("Qwen-2.5-72B", qwenPrompt, "داور هوشمند")
 
         // Step 6: Generate unified output
         logAuditEvent("WORKFLOW_STEP_6", "گام ۶: تولید خروجی منحصربه‌فرد، تصفیه شده و کلیدگذاری شده")

@@ -1110,8 +1110,11 @@ class CitizenViewModel(application: Application) : AndroidViewModel(application)
             // تولید شواهد تجربی مناسب موضوع
             val evidencePrompt = "لیستی از دلایل و مدارک یا شواهد اثبات دعوی مورد نیاز برای پرونده ای با عنوان حقوقی '${_legalPosition.value}' به فارسی بنویس. فقط ۳ مدرک اصلی به صورت خطوطی جداگانه بدون شماره بنویس."
             val evidenceResponse = com.example.network.AiOrchestrator.executeWithFailover("Claude 3.5 Sonnet", evidencePrompt, null)
-            _suggestedEvidence.value = evidenceResponse.lines().filter { it.isNotBlank() }.map { it.replace("- ", "").replace("* ", "").trim() }
-            if (_suggestedEvidence.value.isEmpty()) {
+            val rawLines = evidenceResponse.lines().filter { it.isNotBlank() }.map { it.replace("- ", "").replace("* ", "").trim() }
+            val linesAreValid = rawLines.isNotEmpty() && rawLines.all { it.length < 150 } && !evidenceResponse.contains("دادخواست") && !evidenceResponse.contains("احتراماً") && !evidenceResponse.contains("ریاست")
+            if (linesAreValid) {
+                _suggestedEvidence.value = rawLines
+            } else {
                 _suggestedEvidence.value = listOf(
                     "۱. سند یا قرارداد مکتوب فیزیکی یا تایید ارتباطات الکترونیک",
                     "۲. استشهادیه شهود مطلع متعهد به واقعیت امر و تراکنش‌ها",

@@ -1,6 +1,5 @@
 package com.example.network
 
-import android.content.Context
 import okhttp3.Interceptor
 import okhttp3.Response
 import java.io.IOException
@@ -13,71 +12,32 @@ class SecureStorageKeyInterceptor : Interceptor {
         val host = url.host
         val builder = originalRequest.newBuilder()
 
-        // 1. First read keys from SharedPreferences via context (completely secure and live persistent storage)
+        // Remove our custom tracking header and store its value
+        val providerTag = originalRequest.header("X-AI-Provider")
+        if (providerTag != null) {
+            builder.removeHeader("X-AI-Provider")
+        }
+
+        // Retrieve live active keys synced from Admin/Citizen UI settings to AiOrchestrator
         val context = AiOrchestrator.appContext
-        val prefs = context?.getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
-
-        val geminiKey = if (prefs != null) {
-            prefs.getString("gemini_key_1", "")?.ifBlank {
-                prefs.getString("gemini_key_2", "")?.ifBlank {
-                    prefs.getString("gemini_key_3", "")
-                }
-            } ?: ""
-        } else {
-            AiOrchestrator.adminGeminiKey
+        if (context != null && AiOrchestrator.adminGeminiKey.isBlank() && AiOrchestrator.adminOpenRouterKey.isBlank() && AiOrchestrator.adminOpenAiKey.isBlank()) {
+            AiOrchestrator.loadKeysFromPrefs(context)
         }
 
-        val openRouterKey = if (prefs != null) {
-            prefs.getString("openrouter_key_1", "")?.ifBlank {
-                prefs.getString("openrouter_key_2", "")?.ifBlank {
-                    prefs.getString("openrouter_key_3", "")
-                }
-            } ?: ""
-        } else {
-            AiOrchestrator.adminOpenRouterKey
+        val geminiKey = AiOrchestrator.adminGeminiKey.ifBlank {
+            AiOrchestrator.geminiKeysList.firstOrNull { it.isNotBlank() } ?: ""
         }
-
-        val openAiKey = if (prefs != null) {
-            prefs.getString("openai_key_1", "")?.ifBlank {
-                prefs.getString("openai_key_2", "")?.ifBlank {
-                    prefs.getString("openai_key_3", "")
-                }
-            } ?: ""
-        } else {
-            AiOrchestrator.adminOpenAiKey
+        val openRouterKey = AiOrchestrator.adminOpenRouterKey.ifBlank {
+            AiOrchestrator.openrouterKeysList.firstOrNull { it.isNotBlank() } ?: ""
         }
-
-        val groqKey = if (prefs != null) {
-            prefs.getString("groq_key_1", "")?.ifBlank {
-                prefs.getString("groq_key_2", "")?.ifBlank {
-                    prefs.getString("groq_key_3", "")
-                }
-            } ?: ""
-        } else {
-            AiOrchestrator.groqKeysList.firstOrNull { it.isNotBlank() } ?: ""
+        val openAiKey = AiOrchestrator.adminOpenAiKey.ifBlank {
+            AiOrchestrator.openaiKeysList.firstOrNull { it.isNotBlank() } ?: ""
         }
+        val groqKey = AiOrchestrator.groqKeysList.firstOrNull { it.isNotBlank() } ?: ""
+        val cohereKey = AiOrchestrator.cohereKeysList.firstOrNull { it.isNotBlank() } ?: ""
+        val huggingFaceKey = AiOrchestrator.huggingfaceKeysList.firstOrNull { it.isNotBlank() } ?: ""
 
-        val cohereKey = if (prefs != null) {
-            prefs.getString("cohere_key_1", "")?.ifBlank {
-                prefs.getString("cohere_key_2", "")?.ifBlank {
-                    prefs.getString("cohere_key_3", "")
-                }
-            } ?: ""
-        } else {
-            AiOrchestrator.cohereKeysList.firstOrNull { it.isNotBlank() } ?: ""
-        }
-
-        val huggingFaceKey = if (prefs != null) {
-            prefs.getString("huggingface_key_1", "")?.ifBlank {
-                prefs.getString("huggingface_key_2", "")?.ifBlank {
-                    prefs.getString("huggingface_key_3", "")
-                }
-            } ?: ""
-        } else {
-            AiOrchestrator.huggingfaceKeysList.firstOrNull { it.isNotBlank() } ?: ""
-        }
-
-        // 2. Identify host and inject/override credentials dynamically
+        // Extract original token for validation
         val originalAuth = originalRequest.header("Authorization") ?: ""
         val originalToken = if (originalAuth.startsWith("Bearer ", ignoreCase = true)) {
             originalAuth.substring(7).trim()
@@ -88,60 +48,44 @@ class SecureStorageKeyInterceptor : Interceptor {
             !originalToken.contains("YOUR_") && 
             !originalToken.contains("MY_")
 
-        if (!originalIsValidAndNotPlaceholder) {
-            when {
-                // A. OpenRouter API
-                host.contains("openrouter") || url.toString().contains("openrouter") -> {
-                    val key = openRouterKey.ifBlank { AiOrchestrator.adminOpenRouterKey }
-                    if (key.isNotBlank() && key != "YOUR_OPENROUTER_API_KEY") {
-                        builder.header("Authorization", "Bearer $key")
-                    }
-                }
-                // B. OpenAI API
-                host.contains("openai") || url.toString().contains("openai") -> {
-                    val key = openAiKey.ifBlank { AiOrchestrator.adminOpenAiKey }
-                    if (key.isNotBlank() && key != "YOUR_OPENAI_API_KEY") {
-                        builder.header("Authorization", "Bearer $key")
-                    }
-                }
-                // C. Groq API
-                host.contains("groq") || url.toString().contains("groq") -> {
-                    val key = groqKey.ifBlank { AiOrchestrator.groqKeysList.firstOrNull { it.isNotBlank() } ?: "" }
-                    if (key.isNotBlank()) {
-                        builder.header("Authorization", "Bearer $key")
-                    }
-                }
-                // D. Cohere API
-                host.contains("cohere") || url.toString().contains("cohere") -> {
-                    val key = cohereKey.ifBlank { AiOrchestrator.cohereKeysList.firstOrNull { it.isNotBlank() } ?: "" }
-                    if (key.isNotBlank()) {
-                        builder.header("Authorization", "Bearer $key")
-                    }
-                }
-                // E. HuggingFace API
-                host.contains("huggingface") || url.toString().contains("huggingface") -> {
-                    val key = huggingFaceKey.ifBlank { AiOrchestrator.huggingfaceKeysList.firstOrNull { it.isNotBlank() } ?: "" }
-                    if (key.isNotBlank()) {
-                        builder.header("Authorization", "Bearer $key")
-                    }
-                }
-            }
+        // Determine effective provider using tag metadata first, fallback to hostname matching
+        val effectiveProvider = providerTag ?: when {
+            host.contains("openrouter") || url.toString().contains("openrouter") -> "openrouter"
+            host.contains("openai") || url.toString().contains("openai") -> "openai"
+            host.contains("groq") || url.toString().contains("groq") -> "groq"
+            host.contains("cohere") || url.toString().contains("cohere") -> "cohere"
+            host.contains("huggingface") || url.toString().contains("huggingface") -> "huggingface"
+            host.contains("generativelanguage") || url.encodedPath.contains("generateContent") || host.contains("google") -> "gemini"
+            else -> ""
         }
 
-        // F. Google Gemini API (Query parameter "key" and Header "x-goog-api-key")
-        val originalGeminiHeader = originalRequest.header("x-goog-api-key") ?: ""
-        val originalGeminiParam = url.queryParameter("key") ?: ""
-        val originalGeminiValid = (originalGeminiHeader.isNotBlank() && !originalGeminiHeader.contains("MY_")) ||
-            (originalGeminiParam.isNotBlank() && !originalGeminiParam.contains("MY_"))
+        if (effectiveProvider == "gemini") {
+            val originalGeminiHeader = originalRequest.header("x-goog-api-key") ?: ""
+            val originalGeminiParam = url.queryParameter("key") ?: ""
+            val originalGeminiValid = (originalGeminiHeader.isNotBlank() && !originalGeminiHeader.contains("MY_")) ||
+                (originalGeminiParam.isNotBlank() && !originalGeminiParam.contains("MY_"))
 
-        if (!originalGeminiValid && (host.contains("generativelanguage") || url.encodedPath.contains("generateContent") || host.contains("google"))) {
-            val key = geminiKey.ifBlank { AiOrchestrator.adminGeminiKey }
-            if (key.isNotBlank() && key != "MY_GEMINI_API_KEY") {
-                builder.header("x-goog-api-key", key)
+            if (!originalGeminiValid && geminiKey.isNotBlank() && geminiKey != "MY_GEMINI_API_KEY") {
+                builder.header("x-goog-api-key", geminiKey)
                 val newUrl = url.newBuilder()
-                    .setQueryParameter("key", key)
+                    .setQueryParameter("key", geminiKey)
                     .build()
                 builder.url(newUrl)
+            }
+        } else {
+            // For other API providers, if the original authorization header is blank or placeholder, override it
+            if (!originalIsValidAndNotPlaceholder) {
+                val keyToInject = when (effectiveProvider) {
+                    "openrouter" -> openRouterKey
+                    "openai" -> openAiKey
+                    "groq" -> groqKey
+                    "cohere" -> cohereKey
+                    "huggingface" -> huggingFaceKey
+                    else -> ""
+                }
+                if (keyToInject.isNotBlank() && !keyToInject.contains("YOUR_") && !keyToInject.contains("MY_")) {
+                    builder.header("Authorization", "Bearer $keyToInject")
+                }
             }
         }
 

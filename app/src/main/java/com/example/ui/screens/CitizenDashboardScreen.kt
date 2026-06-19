@@ -13,6 +13,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -43,6 +44,8 @@ fun CitizenDashboardScreen(
     authViewModel: AuthViewModel,
     citizenViewModel: CitizenViewModel,
     adminViewModel: com.example.viewmodel.AdminViewModel,
+    initialTab: String = "dashboard",
+    onTriggerSystemMenu: () -> Unit = {},
     onNavigateToWizard: () -> Unit,
     onNavigateToCase: (Int) -> Unit,
     onNavigateToLibrary: () -> Unit
@@ -53,7 +56,7 @@ fun CitizenDashboardScreen(
     val isDark by authViewModel.isDarkTheme.collectAsState()
     val isDynamicBg by authViewModel.isDynamicBackground.collectAsState()
 
-    var activeTab by remember { mutableStateOf("dashboard") } // dashboard, cases, research, timeline, notifications, profile, settings
+    var activeTab by remember(initialTab) { mutableStateOf(initialTab) } // dashboard, cases, research, timeline, notifications, profile, settings
     var searchQuery by remember { mutableStateOf("") }
 
     val curGeminiKeys by adminViewModel.geminiApiKeys.collectAsState()
@@ -242,30 +245,6 @@ fun CitizenDashboardScreen(
                                 }
                             },
                             actions = {
-                                // Theme Toggle Button
-                                IconButton(
-                                    onClick = { authViewModel.toggleTheme() },
-                                    modifier = Modifier.testTag("theme_toggle_dashboard")
-                                ) {
-                                    Icon(
-                                        imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                        contentDescription = "Theme Toggle",
-                                        tint = AccentGold
-                                    )
-                                }
-
-                                // Key-shaped Background Motion Toggle
-                                IconButton(
-                                    onClick = { authViewModel.toggleDynamicBackground() },
-                                    modifier = Modifier.testTag("background_motion_toggle_dashboard")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.VpnKey,
-                                        contentDescription = "Background Motion Toggle",
-                                        tint = if (isDynamicBg) AccentGold else Color.Gray.copy(alpha = 0.6f)
-                                    )
-                                }
-
                                 Box(
                                     modifier = Modifier
                                         .padding(end = 12.dp)
@@ -752,7 +731,7 @@ fun CitizenDashboardScreen(
                                                     .fillMaxWidth()
                                                     .clickable { 
                                                         prevTabBeforeApis = "profile"
-                                                        activeTab = "apis" 
+                                                        activeTab = "apis"
                                                     }
                                                     .glassy3D(cornerRadius = 16.dp, glowColor = AccentGold.copy(alpha = 0.15f)),
                                                 colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.5f))
@@ -838,7 +817,7 @@ fun CitizenDashboardScreen(
                                             .fillMaxWidth()
                                             .clickable { 
                                                 prevTabBeforeApis = "settings"
-                                                activeTab = "apis" 
+                                                activeTab = "apis"
                                             }
                                             .glassy3D(cornerRadius = 12.dp, glowColor = AccentGold.copy(alpha = 0.1f)),
                                         colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.5f))
@@ -1313,55 +1292,110 @@ fun CitizenDashboardScreen(
                                     // Dynamic Step-by-Step guides as a dialog
                                     if (showGuideForProvider != null) {
                                         val provider = showGuideForProvider!!
+                                        var guideTab by remember(showGuideForProvider) { mutableStateOf(0) }
+                                        
                                         val titleText = when (provider) {
-                                            "gemini" -> "راهنمای گام‌به‌گام Google Gemini"
-                                            "openrouter" -> "راهنمای گام‌به‌گام OpenRouter"
-                                            "openai" -> "راهنمای گام‌به‌گام OpenAI"
-                                            "groq" -> "راهنمای گام‌به‌گام Groq"
-                                            "cohere" -> "راهنمای گام‌به‌گام Cohere"
-                                            "hf" -> "راهنمای گام‌به‌گام Hugging Face LLaMA"
-                                            else -> "راهنمای دریافت کلید API"
+                                            "gemini" -> "مرکز راهنمایی Google Gemini"
+                                            "openrouter" -> "مرکز راهنمایی OpenRouter"
+                                            "openai" -> "مرکز راهنمایی OpenAI Platform"
+                                            "groq" -> "مرکز راهنمایی Groq LPU"
+                                            "cohere" -> "مرکز راهنمایی Cohere"
+                                            "hf" -> "مرکز راهنمایی Hugging Face"
+                                            else -> "راهنمای اتصال هوش مستقل"
                                         }
-                                        val steps = when (provider) {
-                                            "gemini" -> listOf(
-                                                "۱. با فیلترشکن روشن به پرتال توسعه‌دهنده گوگل به نشانی aistudio.google.com مراجعه کنید.",
-                                                "۲. با استفاده از اکانت جیمیل خود وارد کنسول هوش مصنوعی شوید.",
-                                                "۳. روی دکمه آبی رنگ Get API Key در بالا/سمت چپ صفحه کلیک فرمایید.",
-                                                "۴. پس از موافقت با قوانین دکمه Create API Key را بفشارید تا کلید جدید اختصاصی شما تولید شود.",
-                                                "۵. کلید تولیدی با الگوی (AIzaSy...) را کپی کرده و در فیلد مربوطه در این صفحه قرار دهید."
-                                            )
-                                            "openrouter" -> listOf(
-                                                "۱. به وب‌سایت openrouter.ai مراجعه فرمایید و حساب کاربری بسازید.",
-                                                "۲. به بخش تنظیمات (Settings) و قسمت Keys بروید.",
-                                                "۳. روی دکمه Create Key کلیک کنید تا کلید توکن دسترسی برای شما صادر شود.",
-                                                "۴. کلید تولید شده با ساختار (sk-or-...) را فقط یکبار به کارتابل کپی کنید.",
-                                                "۵. از این کلید جامع می‌توانید در سیستم جهت هدایت به مدل‌های نامحدود استفاده کنید."
-                                            )
-                                            "openai" -> listOf(
-                                                "۱. با حساب کاربری فعال خود به پرتال توسعه‌دهندگان platform.openai.com وارد شوید.",
-                                                "۲. از منوی سمت چپ به زبانه API Keys هدایت شوید.",
-                                                "۳. دکمه Create new secret key را انتخاب فرمایید و نام دلخواه برای آن مشخص کنید.",
-                                                "۴. توکن امنیتی صادر شده (با پیشوند sk-proj-) را با دکمه کپی بردارید و در فیلدهای زیر ذخیره کنید."
-                                            )
-                                            "groq" -> listOf(
-                                                "۱. وارد کنسول رایگان و فوق‌سریع پردازش زبان گراک به آدرس console.groq.com شوید.",
-                                                "۲. در ستون سمت چپ به بخش API Keys مراجعه نمایید.",
-                                                "۳. روی دکمه Create API Key کلیک کنید تا پنل صدور فعال شود.",
-                                                "۴. بعد از کپی برداری کلید (با پیشوند gsk-) آن را در بخش کلیدهای برنامه ثبت کنید تا سرعت باورنکردنی در تولید لایحه را تجربه کنید."
-                                            )
-                                            "cohere" -> listOf(
-                                                "۱. وارد وب‌سایت هوش مصنوعی cohere.com یا پرتال داشبورد به آدرس dashboard.cohere.com شوید.",
-                                                "۲. از منوی اصلی یا پورتال کاربری وارد بخش API Keys شوید.",
-                                                "۳. می‌توانید از کلید تست پیش‌فرض (Trial Key) استفاده نمایید و یا روی Create Developer Key کلیک کنید.",
-                                                "۴. محتوای حاصله را کپی و در بخش کلیدها در این برنامه درج نمایید."
-                                            )
-                                            "hf" -> listOf(
-                                                "۱. به وب‌سایت مرجع هوش مصنوعی هاگینگ‌فیس به آدرس huggingface.co وارد شوید.",
-                                                "۲. به صفحه تنظیمات شخصی و به زبانه Tokens (huggingface.co/settings/tokens) هدایت شوید.",
-                                                "۳. دکمه New is token یا Create new token را انتخاب کرده و دسترسی آن را روی Read قرار دهید.",
-                                                "۴. کلید حاصله به ساختار (hf_...) را برداشته و جهت فراخوانی مدل سورس‌باز محلی در این اپلیکیشن ذخیره نمایید."
-                                            )
-                                            else -> emptyList()
+
+                                        val tabHeaders = listOf(
+                                            "کلی (Overview)",
+                                            "ثبت‌نام (Register)",
+                                            "دریافت کلید (API Key)",
+                                            "سهمیه رایگان (Free Tier)",
+                                            "پیکربندی (Config)"
+                                        )
+
+                                        val contentText = when (provider) {
+                                            "gemini" -> when (guideTab) {
+                                                0 -> "• ارائه‌دهنده: شرکت بزرگ گوگل (Google AI Studio)\n" +
+                                                     "• برترین مدل‌ها: Gemini 1.5 Pro & Gemini 1.5 Flash\n" +
+                                                     "• مزیت رقابتی: پنجره بافت فوق‌عریض ۲ میلیون توکنی جهت تحلیل عمیق و هوشمند پرونده‌های قضایی پرحجم، خوانش بی‌نظیر مدارک تصویری و نگارش لوایح منقح به زبان محلی شیرین فارسی در کسری از ثانیه."
+                                                1 -> "۱) یک نرم‌افزار عبور از تحریم (قندشکن/پراکسی) با سرور پایدار غیر ایرانی متصل کنید.\n" +
+                                                     "۲) مرورگر دستگاه خود را باز کنید و وارد پرتال رسمی توسعه‌دهندگان گوگل به نشانی aistudio.google.com شوید.\n" +
+                                                     "۳) با حساب جیمیل (Gmail) استاندارد تاییدشده خود لاگین کنید و توافقات اولیه گوگل را تایید نمایید."
+                                                2 -> "۱) در ستون سمت چپ یا منوی ناوبری اصلی کنسول روی دکمه آبی‌رنگ 'Get API Key' کلیک کنید.\n" +
+                                                     "۲) بلافاصله دکمه 'Create API Key' را بفشارید.\n" +
+                                                     "۳) یک پروژه پیش‌فرض حقوقی تعیین کنید و پس از لود کادر رمز، شناسه توکن را کپی کرده و جهت امنیت دائم، در فیلد ورودی دادرس قرار دهید."
+                                                3 -> "گوگل امکاناتی غنی را رایگان عرضه می‌کند:\n" +
+                                                     "• ۱۵ درخواست در هر دقیقه (15 RPM)\n" +
+                                                     "• ۱,۵۰۰ درخواست در روز (1500 RPD)\n" +
+                                                     "• سهمیه ماهانه گسترده بدون نیاز به کارت اعتباری جهت استفاده مستقل و مقرون‌به‌صرفه عامه مردم."
+                                                4 -> "توکن صادر شده از سیستم گوگل همواره باید از کلیپ‌بورد در کادر 'کلید Google Gemini' در این صفحه وارد شود. این کلیدها با عبارت الگویی پیش‌فرض 'AIzaSy' شروع خواهند شد. اطمینان یابید هیچ فضای خالی (فاصله) اضافه در کادر نباشد."
+                                                else -> ""
+                                            }
+                                            "openrouter" -> when (guideTab) {
+                                                0 -> "• ارائه‌دهنده: پلتفرم باز تجمیع کننده خدمات ابری (OpenRouter.ai)\n" +
+                                                     "• برترین مدل‌ها: Claude 3.5 Sonnet، GPT-4o، DeepSeek V3 و بیش از ۱۵۰ مدل هوش برتر بر لیدربرد جهانی.\n" +
+                                                     "• مزیت رقابتی: بهترین انتخاب برای دور زدن مطمئن تحریم‌ها و اتصال به چندین مغز استدلالی حقوقی پیشرفته در یک فریم‌ورک یکپارچه."
+                                                1 -> "۱) آدرس وب‌سایت اصلی openrouter.ai را در مرورگر تلفن باز فرمایید.\n" +
+                                                     "۲) در بالا راست دکمه 'Sign In' را لمس کنید.\n" +
+                                                     "۳) خیلی ساده می‌توانید با اکانت امن گوگل (جیمیل) خود بدون دردسر ساخت احراز هویت اولیه عضو شوید."
+                                                2 -> "۱) از دایره منوی پروفایل کاربری خود در بالا سمت راست، گزینه 'Settings' و سپس 'Keys' را کلیک کنید.\n" +
+                                                     "۲) دکمه بزرگ 'Create Key' را انتخاب کنید.\n" +
+                                                     "۳) یک نام دلخواه (مثلاً DadrasApp) بنویسید و کلید هوشمند نهایی را فقط برای یک بار نمایش داده شده کپی و نگهداری کنید."
+                                                3 -> "اپن‌روتر دسترسی دائمی به ده‌ها مدل لیدربرد جهانی معروف بالا بالا را ۱۰۰٪ رایگان یا با هزینه‌ای ناچیز (کمتر از چند هزارم دلار) فراهم می‌سازد. مدل‌های پرقدرتی مثل Qwen 2.5-72B و Llama-3 در گیت‌وی اپن‌روتر رایگان و نامحدود هستند."
+                                                4 -> "کلید صادر شده را در باکس ورودی 'کلید OpenRouter' درج کنید. این کلید همواره با عبارت ثابت الگوی 'sk-or-...' آغاز می‌شود که فعال‌ساز تمام ربات‌های هوشمند سیستم خواهد بود."
+                                                else -> ""
+                                            }
+                                            "openai" -> when (guideTab) {
+                                                0 -> "• ارائه‌دهنده: موسسه هوش مصنوعی اوپن ای‌آی (OpenAI platform)\n" +
+                                                     "• برترین مدل‌ها: GPT-4o (سازمانی)، GPT-4-mini\n" +
+                                                     "• مزیت رقابتی: بهینه‌ترین و شیواترین نثر نگارش آرا، لوايح، شکواییه‌ها بر پایه رعایت ادبیات رسمی حقوقی بومی جمهوری اسلامی ایران."
+                                                1 -> "۱) وارد آدرس platform.openai.com مجرای دولوپرهای محترم شوید.\n" +
+                                                     "۲) دکمه 'Sign Up' را بزنید و مراحل ایجاد اکانت را از طریق ایمیل تاییدیه خود پشت سر بگذارید."
+                                                2 -> "۱) در سایدبار سمت راست منوی اکانت هوشمند، وارد زبانه مدیریت اصلی تحت عنوان 'API Keys' شوید.\n" +
+                                                     "۲) دکمه '+ Create new secret key' را انتخاب و یک نام اختیاری بگذارید.\n" +
+                                                     "۳) بلافاصله کپی برداری کلید نهایی را انجام دهید و در جای امن الصاق کنید."
+                                                3 -> "اکانت‌های دولوپر ورودی به این ارائه‌دهنده، در ابتدا معادل ۵ دلار شارژ هدیه رایگان (Trial Credit) دریافت می‌کنند که جهت ساخت، ویرایش و تنظیم صدها صفحه لایحه تخصص قضایی کارآموزان کافی خواهد بود."
+                                                4 -> "کلید اختصاصی برداشته شده را در کارتابل OpenAI ذخیره کنید. این کلیدها از منظر الگویی حتماً با پیشوند استاندارد 'sk-proj-...' شروع خواهند گردید."
+                                                else -> ""
+                                            }
+                                            "groq" -> when (guideTab) {
+                                                0 -> "• ارائه‌دهنده: پایگاه سخت‌افزارهای پردازشی فوق‌سریع لایتنینگ (Groq LPU)\n" +
+                                                     "• برترین مدل‌ها: LLaMA 3.1 70B (توسط متا)، Mixtral 8x7B\n" +
+                                                     "• مزیت رقابتی: پادشاه بلامنازع سرعت استنتاج زبانی دنیا. اگر نیاز دارید در کم‌ترین زمان و با سرعت خیره‌کننده زیر ۱ ثانیه‌ای لوایح اولیه مد نظر به روز رسانی شوند، گراک بی‌همتا است."
+                                                1 -> "۱) به فضا و داشبورد مدیریتی فوق پیشرفته به آدرس console.groq.com مراجعه کنید.\n" +
+                                                     "۲) با زدن مستقیم دکمه جیمیل گوگل، وارد سیستم شوید."
+                                                2 -> "۱) از نوار منوها یا فهرست اصلی پنل، روی بخش 'API Keys' کلیلک داشته باشید.\n" +
+                                                     "۲) روی گزینه 'Create API Key' ضربه بزنید.\n" +
+                                                     "۳) کلید صادر شده را با زدن دکمه کپی به حافظه موقت انتقال دهید."
+                                                3 -> "شرکت معتبر گراک در حال حاضر ۱۰۰٪ آزاد و کاملاً رایگان سهمیه روزانه و ساعتی عظیمی را در اختیار برنامه‌نویسان قرار می‌دهد تا متون حقوقی با غنای عالی و بدون کوچک‌ترین محدودیت شارژ مالی نگارش گردند."
+                                                4 -> "کلید دریافتی دارای فرمت الگوی کلی 'gsk-...' می‌باشد. آن را با دقت برداشته و در کارتابل اختصاصی گراک قرار دهید تا شتاب استنباط آن بیدار شود."
+                                                else -> ""
+                                            }
+                                            "cohere" -> when (guideTab) {
+                                                0 -> "• ارائه‌دهنده: پلتفرم نامی تحقیقاتی کوهر کانادا (Cohere)\n" +
+                                                     "• برترین مدل‌ها: Command R+ & Command R\n" +
+                                                     "• مزیت رقابتی: مدل Command R عمیقاً برای تحلیل موازی زبان‌های بین‌المللی و بومی از جمله زبان فارسی آموزش دیده و در انطباق مواد قانونی فقهی و حقوقی کشور عملکرد موثری دارد."
+                                                1 -> "۱) به پرتال داشبورد و تبلت توسعه‌دهندگان پایگاه به آدرس dashboard.cohere.com مراجعه نمایید.\n" +
+                                                     "۲) با ثبت نام ایمیلی رایگان یک اکانت معتبر اختصاص دهید."
+                                                2 -> "۱) از منوی داشبورد بالا، زبانه 'API Keys' را لمس نموده تا وارد شوید.\n" +
+                                                     "۲) شرکت کوهر در آغاز یک کلید تست تحت عنوان Trial Key پیش فرض در اختیارتان می‌گذارد که بلافاصله کپی برداری آن برای مصارف مستقل در این سیستم آماده می‌باشد."
+                                                3 -> "سهمیه رایگان و آزمایشی این توکن دسترسی برای راستی‌آزمایی و بررسی‌های مستمر نگارش در برنامه دادرس به ارزش ده‌ها درخواست پردازشی در روز ۱۰۰٪ بدون پرداخت وجه پابرجا خواهد بود."
+                                                4 -> "با استفاده از توکن کپی شده به عنوان کلید آزمایشی اختصاصی کوهر، آن را داخل فیلد ثبت کلید 'Cohere' در داشبورد ثبت فرمایید."
+                                                else -> ""
+                                            }
+                                            "hf" -> when (guideTab) {
+                                                0 -> "• ارائه‌دهنده: پایگاه مرجع هوش باز دنیا هاگینگ فیس (Hugging Face Hub)\n" +
+                                                     "• برترین مدل‌ها: LLaMA 3 (متا)، Qwen 2.5، Mistral\n" +
+                                                     "• مزیت رقابتی: دریچه دسترسی برخط به هزاران مدل متن‌باز آزاد محلی و تحقیقاتی معتبر سراسر دنیا بدون هیچ هزینه اضافی."
+                                                1 -> "۱) با مرورگر به هاب مرجع رسمی هوش باز دنیا به نشانی huggingface.co مراجعه فرمایید.\n" +
+                                                     "۲) گزینه 'Sign Up' را انتخاب نموده و اکانت رایگان بسازید."
+                                                2 -> "۱) با زدن دایره عکس پروفایل کاربری خود در بالا راست، وارد بخش اصلی تنظیمات یا 'Settings' شوید.\n" +
+                                                     "۲) از منوی کناری زبانه مستقل اکتیو 'Access Tokens' (huggingface.co/settings/tokens) را باز کنید.\n" +
+                                                     "۳) دکمه 'New Token' را زده، نامی بنویسید و فیلد دسترسی را حتماً روی حالت 'Read' تعریف کنید."
+                                                3 -> "هاگینگ‌فیس به شما اجازه می‌دهد به‌صورت نامحدود از اندپوینت اینفرنس سورس‌باز تستی استفاده بکنید که همواره ۱۰۰٪ رایگان و ماناست."
+                                                4 -> "کلید کپی شده را که نمونه الگویی آن با پیشوند اختصاصی 'hf_...' آغاز می‌شود را دریافت کرده و در باکس همنام Hugging Face الصاق نمایید."
+                                                else -> ""
+                                            }
+                                            else -> ""
                                         }
 
                                         AlertDialog(
@@ -1371,33 +1405,95 @@ fun CitizenDashboardScreen(
                                                     onClick = { showGuideForProvider = null },
                                                     modifier = Modifier.testTag("guide_dialog_close")
                                                 ) {
-                                                    Text("متوجه شدم", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                                    Text("متوجه شدم و بستن راهنما", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold)
                                                 }
                                             },
                                             title = {
-                                                Text(
-                                                    text = titleText,
-                                                    style = Typography.titleMedium,
-                                                    fontWeight = FontWeight.Bold,
-                                                    color = AccentGold,
-                                                    textAlign = TextAlign.Right,
-                                                    modifier = Modifier.fillMaxWidth()
-                                                )
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Info,
+                                                        contentDescription = null,
+                                                        tint = AccentGold,
+                                                        modifier = Modifier.size(24.dp)
+                                                    )
+                                                    Text(
+                                                        text = titleText,
+                                                        style = Typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = AccentGold,
+                                                        textAlign = TextAlign.Right
+                                                    )
+                                                }
                                             },
                                             text = {
                                                 Column(
                                                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(12.dp),
                                                     horizontalAlignment = Alignment.End
                                                 ) {
-                                                    steps.forEach { step ->
-                                                        Text(
-                                                            text = step,
-                                                            style = Typography.bodyMedium,
-                                                            color = Color.White,
-                                                            textAlign = TextAlign.Right,
-                                                            modifier = Modifier.fillMaxWidth()
-                                                        )
+                                                    // Responsive Pill Selector for 5 Help Sections (RTL Scrollable Row)
+                                                    Row(
+                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .horizontalScroll(rememberScrollState()),
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        tabHeaders.asReversed().forEachIndexed { indexReversed, headerTitle ->
+                                                            val originalIndex = tabHeaders.size - 1 - indexReversed
+                                                            val isSelected = guideTab == originalIndex
+                                                            
+                                                            Box(
+                                                                modifier = Modifier
+                                                                    .clip(RoundedCornerShape(20.dp))
+                                                                    .background(if (isSelected) AccentGold else Color.White.copy(alpha = 0.05f))
+                                                                    .border(
+                                                                        width = 1.dp,
+                                                                        color = if (isSelected) AccentGold else Color.White.copy(alpha = 0.15f),
+                                                                        shape = RoundedCornerShape(20.dp)
+                                                                    )
+                                                                    .clickable { guideTab = originalIndex }
+                                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
+                                                            ) {
+                                                                Text(
+                                                                    text = headerTitle,
+                                                                    color = if (isSelected) Color.Black else Color.White.copy(alpha = 0.8f),
+                                                                    style = Typography.labelSmall,
+                                                                    fontWeight = FontWeight.Bold
+                                                                )
+                                                            }
+                                                        }
+                                                    }
+
+                                                    Spacer(modifier = Modifier.height(4.dp))
+
+                                                    // Main tab content scrollable panel
+                                                    Card(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .heightIn(max = 240.dp),
+                                                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f))
+                                                    ) {
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .verticalScroll(rememberScrollState())
+                                                                .padding(12.dp),
+                                                            verticalArrangement = Arrangement.Top,
+                                                            horizontalAlignment = Alignment.End
+                                                        ) {
+                                                            Text(
+                                                                text = contentText,
+                                                                style = Typography.bodyMedium,
+                                                                color = Color.White.copy(alpha = 0.95f),
+                                                                textAlign = TextAlign.Right,
+                                                                modifier = Modifier.fillMaxWidth()
+                                                            )
+                                                        }
                                                     }
                                                 }
                                             },

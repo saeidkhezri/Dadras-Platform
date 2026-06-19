@@ -59,6 +59,7 @@ data class PartResponse(
 
 interface GeminiApiService {
     @POST("v1beta/models/gemini-3.5-flash:generateContent")
+    @retrofit2.http.Headers("X-AI-Provider: gemini")
     suspend fun generateContent(
         @Query("key") apiKey: String,
         @Body request: GenerateContentRequest

@@ -17,6 +17,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.example.ui.components.CopilotOverlay
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.testTag
 import com.example.ui.screens.*
 import com.example.ui.theme.MyApplicationTheme
 import com.example.viewmodel.AdminViewModel
@@ -39,6 +47,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         com.example.network.AiOrchestrator.appContext = applicationContext
+        com.example.network.AiOrchestrator.loadKeysFromPrefs(applicationContext)
         enableEdgeToEdge()
         setContent {
             val authViewModel: AuthViewModel = viewModel()
@@ -56,6 +65,7 @@ class MainActivity : ComponentActivity() {
 
                 // ردیابی نام صفحه جاری برای راهنمایی هوشمند دستیار کپیلوت
                 var currentScreenName by remember { mutableStateOf("صفحه ورود") }
+                var isUniversalMenuOpen by remember { mutableStateOf(false) }
 
                 Scaffold(
                     modifier = Modifier.fillMaxSize()
@@ -91,12 +101,18 @@ class MainActivity : ComponentActivity() {
                             }
 
                             // ۲. پیشخوان کاربر عادی
-                            composable("dashboard") {
+                            composable(
+                                route = "dashboard?tab={tab}",
+                                arguments = listOf(navArgument("tab") { defaultValue = "dashboard"; type = NavType.StringType })
+                            ) { backStackEntry ->
+                                val tab = backStackEntry.arguments?.getString("tab") ?: "dashboard"
                                 currentScreenName = "میز خدمت کاربران عادی"
                                 CitizenDashboardScreen(
                                     authViewModel = authViewModel,
                                     citizenViewModel = citizenViewModel,
                                     adminViewModel = adminViewModel,
+                                    initialTab = tab,
+                                    onTriggerSystemMenu = { isUniversalMenuOpen = true },
                                     onNavigateToWizard = { navController.navigate("wizard") },
                                     onNavigateToCase = { id -> navController.navigate("case_detail/$id") },
                                     onNavigateToLibrary = { navController.navigate("library") }
@@ -163,6 +179,44 @@ class MainActivity : ComponentActivity() {
                                 copilotViewModel = copilotViewModel,
                                 currentScreenName = currentScreenName
                             )
+
+                            // منوی فرادست سراسری سیستم (شناور بر تمامی صفحات و کارتابل‌ها)
+                            com.example.ui.components.UniversalSystemMenu(
+                                authViewModel = authViewModel,
+                                adminViewModel = adminViewModel,
+                                isOpen = isUniversalMenuOpen,
+                                onClose = { isUniversalMenuOpen = false },
+                                onNavigateToCitizenTab = { tabId ->
+                                    navController.navigate("dashboard?tab=$tabId") {
+                                        popUpTo("dashboard?tab={tab}") { inclusive = false }
+                                        launchSingleTop = true
+                                    }
+                                },
+                                navController = navController
+                            )
+
+                            // دکمه شناور ارگونومیک فعال‌سازی منوی سراسری فرادست دادرس (طراحی شیشه‌ای لوکس در پایین چپ)
+                            Box(
+                                modifier = Modifier
+                                    .align(androidx.compose.ui.Alignment.BottomStart)
+                                    .padding(start = 16.dp, bottom = 100.dp)
+                            ) {
+                                FloatingActionButton(
+                                    onClick = { isUniversalMenuOpen = !isUniversalMenuOpen },
+                                    containerColor = com.example.ui.theme.AccentGold,
+                                    contentColor = Color.Black,
+                                    shape = androidx.compose.foundation.shape.CircleShape,
+                                    modifier = Modifier
+                                        .size(56.dp)
+                                        .testTag("universal_system_menu_fab")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = "Universal Menu Settings",
+                                        modifier = Modifier.size(26.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
