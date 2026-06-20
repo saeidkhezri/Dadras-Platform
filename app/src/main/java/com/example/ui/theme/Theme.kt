@@ -23,17 +23,17 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = AppleBlueLight,
-    secondary = SlateNavyMedium,
-    tertiary = SoftGreenLight,
-    background = Color(0xFFF8FAFC), // Off-white/pure background for apple look
-    surface = GlassSurfaceLightMode,
-    error = SoftRedLight,
+    primary = Color(0xFF0F172A), // Elite Obsidian Navy for a premium luxurious feel
+    secondary = Color(0xFF334155), // Slate Gray
+    tertiary = Color(0xFF0369A1), // Deep Ocean Blue
+    background = Color(0xFFF8FAFC), // Elegant light silk-gray background
+    surface = Color(0xFFFFFFFF), // Pure polished white card surface
+    error = Color(0xFFDC2626), // Crimson error
     onPrimary = Color.White,
-    onSecondary = Color.Black,
-    onTertiary = Color.Black,
+    onSecondary = Color.White,
+    onTertiary = Color.White,
     onBackground = Color(0xFF0F172A),
-    onSurface = Color(0xFF475569)
+    onSurface = Color(0xFF1E293B)
 )
 
 @Composable

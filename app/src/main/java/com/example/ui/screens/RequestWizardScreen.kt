@@ -938,7 +938,7 @@ fun RequestWizardScreen(
                             8 -> {
                                 // GĀM 8: Final Official Document Export + Download Setup + Local Database Save
                                 Text(
-                                    text = "گام هشتم: دریافت فایل نهایی و ثبت در کارتابل ملی",
+                                    text = "گام هشتم: دریافت فایل نهایی و ثبت در کارتابل کاربری",
                                     style = Typography.titleLarge,
                                     color = onBgColor,
                                     fontWeight = FontWeight.Bold,
@@ -947,7 +947,7 @@ fun RequestWizardScreen(
                                 )
 
                                 Text(
-                                    text = "پرونده لایحه قضایی شما آماده نهایی‌سازی است. پس از نام‌گذاری دلخواه، فرمت مدنظر خود را برای استفاده آفلاین دانلود نموده و پرونده را در کارتابل ملی ثبت کنید تا همواره به آن دسترسی داشته باشید.",
+                                    text = "پرونده لایحه قضایی شما آماده نهایی‌سازی است. پس از نام‌گذاری دلخواه، فرمت مدنظر خود را برای استفاده آفلاین دانلود نموده و پرونده را در کارتابل کاربری ثبت کنید تا همواره به آن دسترسی داشته باشید.",
                                     style = Typography.bodyMedium,
                                     color = onSurfaceColor,
                                     textAlign = TextAlign.Right,
@@ -1007,7 +1007,7 @@ fun RequestWizardScreen(
                                     onValueChange = { finalCaseTitle = it },
                                     placeholder = { Text("مثال: لایحه شکایت تصرف عدوانی ملکی نهایی", color = onSurfaceColor) },
                                     modifier = Modifier.fillMaxWidth(),
-                                    label = { Text("نام مستعار برای ذخیره پرونده در کارتابل ملی", color = AccentGold) },
+                                    label = { Text("نام مستعار برای ذخیره پرونده در کارتابل کاربری", color = AccentGold) },
                                     colors = OutlinedTextFieldDefaults.colors(
                                         focusedTextColor = onBgColor,
                                         unfocusedTextColor = onBgColor,
@@ -1045,7 +1045,7 @@ fun RequestWizardScreen(
                                     colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
                                     shape = RoundedCornerShape(12.dp)
                                 ) {
-                                    Text("ثبت نهایی و انتقال به کارتابل ملی من", style = Typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
+                                    Text("ثبت نهایی و انتقال به کارتابل کاربری من", style = Typography.titleMedium, color = Color.White, fontWeight = FontWeight.Bold)
                                 }
                             }
                         }

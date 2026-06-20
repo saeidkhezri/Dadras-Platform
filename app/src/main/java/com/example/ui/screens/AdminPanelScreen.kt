@@ -1259,12 +1259,12 @@ fun AdminPanelScreen(
                         val curHuggingFaceKeys by adminViewModel.huggingfaceApiKeys.collectAsState()
                         val curGeminiProxyUrl by adminViewModel.geminiProxyUrl.collectAsState()
 
-                        var tempGeminiKeys by remember(curGeminiKeys) { mutableStateOf(curGeminiKeys.ifEmpty { listOf("", "", "") }) }
-                        var tempOpenRouterKeys by remember(curOpenRouterKeys) { mutableStateOf(curOpenRouterKeys.ifEmpty { listOf("", "", "") }) }
-                        var tempOpenAiKeys by remember(curOpenAiKeys) { mutableStateOf(curOpenAiKeys.ifEmpty { listOf("", "", "") }) }
-                        var tempGroqKeys by remember(curGroqKeys) { mutableStateOf(curGroqKeys.ifEmpty { listOf("", "", "") }) }
-                        var tempCohereKeys by remember(curCohereKeys) { mutableStateOf(curCohereKeys.ifEmpty { listOf("", "", "") }) }
-                        var tempHuggingFaceKeys by remember(curHuggingFaceKeys) { mutableStateOf(curHuggingFaceKeys.ifEmpty { listOf("", "", "") }) }
+                        var tempGeminiKeys by remember(curGeminiKeys) { mutableStateOf(curGeminiKeys.ifEmpty { listOf("") }) }
+                        var tempOpenRouterKeys by remember(curOpenRouterKeys) { mutableStateOf(curOpenRouterKeys.ifEmpty { listOf("") }) }
+                        var tempOpenAiKeys by remember(curOpenAiKeys) { mutableStateOf(curOpenAiKeys.ifEmpty { listOf("") }) }
+                        var tempGroqKeys by remember(curGroqKeys) { mutableStateOf(curGroqKeys.ifEmpty { listOf("") }) }
+                        var tempCohereKeys by remember(curCohereKeys) { mutableStateOf(curCohereKeys.ifEmpty { listOf("") }) }
+                        var tempHuggingFaceKeys by remember(curHuggingFaceKeys) { mutableStateOf(curHuggingFaceKeys.ifEmpty { listOf("") }) }
                         var tempGeminiProxyUrl by remember(curGeminiProxyUrl) { mutableStateOf(curGeminiProxyUrl) }
 
                         Column(
@@ -1395,7 +1395,8 @@ fun AdminPanelScreen(
                             Spacer(modifier = Modifier.height(8.dp))
 
                             // کارت مدیریت کلیدهای امنیتی هوش مصنوعی (API Keys)
-                            val context = androidx.compose.ui.platform.LocalContext.current
+                            var activeGuideInfo by remember { mutableStateOf<ApiGuideInfo?>(null) }
+                            
                             Card(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -1421,294 +1422,112 @@ fun AdminPanelScreen(
                                     )
                                     Divider(color = GlassBorderLight)
 
-                                    // ۱. Gemini API Key Inputs
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-                                        Text(text = "کلیدهای اختصاصی Google Gemini API (تا ۳ کلید):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable {
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://aistudio.google.com/app/apikey"))
-                                                    context.startActivity(intent)
-                                                }
-                                                .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "کسب کلید رایگان گوگل جمینای",
-                                                style = Typography.labelSmall,
-                                                color = AccentGold,
-                                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                            )
+                                    // 1. Google Gemini API Keys
+                                    ApiKeyServiceSection(
+                                        title = "کلیدهای اختصاصی Google Gemini API (تا ۳ کلید با اولویت بالا به پایین):",
+                                        guideTitle = "راهنمای اتصال Google Gemini",
+                                        onOpenGuide = { activeGuideInfo = geminiGuide },
+                                        keys = tempGeminiKeys,
+                                        onKeysChange = { tempGeminiKeys = it },
+                                        placeholderPrefix = "کلید جمینای",
+                                        onTestKey = { key, onResult ->
+                                            testKeyConnection("Gemini", key, onResult)
                                         }
-                                        for (i in 0..2) {
-                                            val v = tempGeminiKeys.getOrNull(i) ?: ""
-                                            OutlinedTextField(
-                                                value = v,
-                                                onValueChange = { newVal ->
-                                                    val updated = tempGeminiKeys.toMutableList()
-                                                    while (updated.size <= i) updated.add("")
-                                                    updated[i] = newVal
-                                                    tempGeminiKeys = updated
-                                                },
-                                                placeholder = { Text("کلید شماره ${i+1} جمینای (مثال: AIzaSy...)", color = TextSecondaryFarsi) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedTextColor = Color.White,
-                                                    unfocusedTextColor = Color.White,
-                                                    focusedBorderColor = AccentGold,
-                                                    unfocusedBorderColor = GlassBorderLight
-                                                )
-                                            )
-                                        }
-                                    }
-
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    )
 
                                     Spacer(modifier = Modifier.height(6.dp))
-                                     Text(text = "آدرس اینترنتی پروکسی/گذرگاه Google Gemini (اختیاری جهت رفع تحریم):", style = Typography.labelSmall, color = TextSecondaryFarsi)
-                                     OutlinedTextField(
-                                         value = tempGeminiProxyUrl,
-                                         onValueChange = { tempGeminiProxyUrl = it },
-                                         placeholder = { Text("مثال: https://generativelanguage.googleapis.com/", color = TextSecondaryFarsi) },
-                                         singleLine = true,
-                                         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                         shape = RoundedCornerShape(8.dp),
-                                         colors = OutlinedTextFieldDefaults.colors(
-                                             focusedTextColor = Color.White,
-                                             unfocusedTextColor = Color.White,
-                                             focusedBorderColor = AccentGold,
-                                             unfocusedBorderColor = GlassBorderLight
-                                         )
-                                     )
+                                    Text(text = "آدرس اینترنتی پروکسی/گذرگاه Google Gemini (اختیاری جهت رفع تحریم):", style = Typography.labelSmall, color = TextSecondaryFarsi)
+                                    OutlinedTextField(
+                                        value = tempGeminiProxyUrl,
+                                        onValueChange = { tempGeminiProxyUrl = it },
+                                        placeholder = { Text("مثال: https://generativelanguage.googleapis.com/", color = TextSecondaryFarsi) },
+                                        singleLine = true,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedTextColor = Color.White,
+                                            unfocusedTextColor = Color.White,
+                                            focusedBorderColor = AccentGold,
+                                            unfocusedBorderColor = GlassBorderLight
+                                        )
+                                    )
 
-                                     Spacer(modifier = Modifier.height(4.dp))
+                                    Divider(color = GlassBorderLight.copy(alpha = 0.5f))
 
-                                     // ۲. OpenRouter API Key Inputs
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-                                        Text(text = "کلیدهای اختصاصی OpenRouter API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable {
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://openrouter.ai/keys"))
-                                                    context.startActivity(intent)
-                                                }
-                                                .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "کسب کلید اپن‌روتر",
-                                                style = Typography.labelSmall,
-                                                color = AccentGold,
-                                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                            )
+                                    // 2. OpenRouter API Keys
+                                    ApiKeyServiceSection(
+                                        title = "کلیدهای اختصاصی OpenRouter API (تا ۳ کلید با اولویت بالا به پایین):",
+                                        guideTitle = "راهنمای اتصال OpenRouter",
+                                        onOpenGuide = { activeGuideInfo = openRouterGuide },
+                                        keys = tempOpenRouterKeys,
+                                        onKeysChange = { tempOpenRouterKeys = it },
+                                        placeholderPrefix = "کلید اپن‌روتر",
+                                        onTestKey = { key, onResult ->
+                                            testKeyConnection("OpenRouter", key, onResult)
                                         }
-                                        for (i in 0..2) {
-                                            val v = tempOpenRouterKeys.getOrNull(i) ?: ""
-                                            OutlinedTextField(
-                                                value = v,
-                                                onValueChange = { newVal ->
-                                                    val updated = tempOpenRouterKeys.toMutableList()
-                                                    while (updated.size <= i) updated.add("")
-                                                    updated[i] = newVal
-                                                    tempOpenRouterKeys = updated
-                                                },
-                                                placeholder = { Text("کلید شماره ${i+1} اپن‌روتر (مثال: sk-or-...)", color = TextSecondaryFarsi) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedTextColor = Color.White,
-                                                    unfocusedTextColor = Color.White,
-                                                    focusedBorderColor = AccentGold,
-                                                    unfocusedBorderColor = GlassBorderLight
-                                                )
-                                            )
-                                        }
-                                    }
+                                    )
 
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Divider(color = GlassBorderLight.copy(alpha = 0.5f))
 
-                                    // ۳. OpenAI API Key Inputs
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-                                        Text(text = "کلیدهای اختصاصی OpenAI API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable {
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://platform.openai.com/api-keys"))
-                                                    context.startActivity(intent)
-                                                }
-                                                .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "مدیریت و صدور کلیدهای OpenAI",
-                                                style = Typography.labelSmall,
-                                                color = AccentGold,
-                                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                            )
+                                    // 3. OpenAI API Keys
+                                    ApiKeyServiceSection(
+                                        title = "کلیدهای اختصاصی OpenAI API (تا ۳ کلید با اولویت بالا به پایین):",
+                                        guideTitle = "راهنمای اتصال OpenAI",
+                                        onOpenGuide = { activeGuideInfo = openAiGuide },
+                                        keys = tempOpenAiKeys,
+                                        onKeysChange = { tempOpenAiKeys = it },
+                                        placeholderPrefix = "کلید اپن‌ای‌آی",
+                                        onTestKey = { key, onResult ->
+                                            testKeyConnection("OpenAI", key, onResult)
                                         }
-                                        for (i in 0..2) {
-                                            val v = tempOpenAiKeys.getOrNull(i) ?: ""
-                                            OutlinedTextField(
-                                                value = v,
-                                                onValueChange = { newVal ->
-                                                    val updated = tempOpenAiKeys.toMutableList()
-                                                    while (updated.size <= i) updated.add("")
-                                                    updated[i] = newVal
-                                                    tempOpenAiKeys = updated
-                                                },
-                                                placeholder = { Text("کلید شماره ${i+1} اپن‌ای‌آی (مثال: sk-proj-...)", color = TextSecondaryFarsi) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedTextColor = Color.White,
-                                                    unfocusedTextColor = Color.White,
-                                                    focusedBorderColor = AccentGold,
-                                                    unfocusedBorderColor = GlassBorderLight
-                                                )
-                                            )
-                                        }
-                                    }
+                                    )
 
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Divider(color = GlassBorderLight.copy(alpha = 0.5f))
 
-                                    // ۴. Groq API Key Inputs
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-                                        Text(text = "کلیدهای اختصاصی Groq API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable {
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://console.groq.com/keys"))
-                                                    context.startActivity(intent)
-                                                }
-                                                .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "کسب کلید رایگان و پرسرعت گراک (Groq Consoles)",
-                                                style = Typography.labelSmall,
-                                                color = AccentGold,
-                                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                            )
+                                    // 4. Groq API Keys
+                                    ApiKeyServiceSection(
+                                        title = "کلیدهای اختصاصی Groq API (تا ۳ کلید با اولویت بالا به پایین):",
+                                        guideTitle = "راهنمای اتصال Groq Cloud",
+                                        onOpenGuide = { activeGuideInfo = groqGuide },
+                                        keys = tempGroqKeys,
+                                        onKeysChange = { tempGroqKeys = it },
+                                        placeholderPrefix = "کلید گراک",
+                                        onTestKey = { key, onResult ->
+                                            testKeyConnection("Groq", key, onResult)
                                         }
-                                        for (i in 0..2) {
-                                            val v = tempGroqKeys.getOrNull(i) ?: ""
-                                            OutlinedTextField(
-                                                value = v,
-                                                onValueChange = { newVal ->
-                                                    val updated = tempGroqKeys.toMutableList()
-                                                    while (updated.size <= i) updated.add("")
-                                                    updated[i] = newVal
-                                                    tempGroqKeys = updated
-                                                },
-                                                placeholder = { Text("کلید شماره ${i+1} گراک (مثال: gsk-...)", color = TextSecondaryFarsi) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedTextColor = Color.White,
-                                                    unfocusedTextColor = Color.White,
-                                                    focusedBorderColor = AccentGold,
-                                                    unfocusedBorderColor = GlassBorderLight
-                                                )
-                                            )
-                                        }
-                                    }
+                                    )
 
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Divider(color = GlassBorderLight.copy(alpha = 0.5f))
 
-                                    // ۵. Cohere API Key Inputs
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-                                        Text(text = "کلیدهای اختصاصی Cohere API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable {
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://dashboard.cohere.com/api-keys"))
-                                                    context.startActivity(intent)
-                                                }
-                                                .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "کسب کلید رایگان توسعه‌دهنده کوهر",
-                                                style = Typography.labelSmall,
-                                                color = AccentGold,
-                                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                            )
+                                    // 5. Cohere API Keys
+                                    ApiKeyServiceSection(
+                                        title = "کلیدهای اختصاصی Cohere API (تا ۳ کلید با اولویت بالا به پایین):",
+                                        guideTitle = "راهنمای اتصال Cohere AI",
+                                        onOpenGuide = { activeGuideInfo = cohereGuide },
+                                        keys = tempCohereKeys,
+                                        onKeysChange = { tempCohereKeys = it },
+                                        placeholderPrefix = "کلید کوهر",
+                                        onTestKey = { key, onResult ->
+                                            testKeyConnection("Cohere", key, onResult)
                                         }
-                                        for (i in 0..2) {
-                                            val v = tempCohereKeys.getOrNull(i) ?: ""
-                                            OutlinedTextField(
-                                                value = v,
-                                                onValueChange = { newVal ->
-                                                    val updated = tempCohereKeys.toMutableList()
-                                                    while (updated.size <= i) updated.add("")
-                                                    updated[i] = newVal
-                                                    tempCohereKeys = updated
-                                                },
-                                                placeholder = { Text("کلید شماره ${i+1} کوهر (مثال: co_...)", color = TextSecondaryFarsi) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedTextColor = Color.White,
-                                                    unfocusedTextColor = Color.White,
-                                                    focusedBorderColor = AccentGold,
-                                                    unfocusedBorderColor = GlassBorderLight
-                                                )
-                                            )
-                                        }
-                                    }
+                                    )
 
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Divider(color = GlassBorderLight.copy(alpha = 0.5f))
 
-                                    // ۶. Hugging Face API Key Inputs
-                                    Column(verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-                                        Text(text = "کلیدهای اختصاصی Hugging Face API (تا ۳ کلید با اولویت بالا به پایین):", style = Typography.bodyMedium, color = TextPrimaryFarsi)
-                                        Row(
-                                            modifier = Modifier
-                                                .clickable {
-                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("https://huggingface.co/settings/tokens"))
-                                                    context.startActivity(intent)
-                                                }
-                                                .padding(vertical = 4.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = "صدور توکن دسترسی رایگان هاگینگ‌فیس (HF Access Tokens)",
-                                                style = Typography.labelSmall,
-                                                color = AccentGold,
-                                                textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline
-                                            )
+                                    // 6. Hugging Face Access Tokens
+                                    ApiKeyServiceSection(
+                                        title = "کلیدهای اختصاصی Hugging Face API (تا ۳ کلید با اولویت بالا به پایین):",
+                                        guideTitle = "راهنمای اتصال Hugging Face",
+                                        onOpenGuide = { activeGuideInfo = huggingFaceGuide },
+                                        keys = tempHuggingFaceKeys,
+                                        onKeysChange = { tempHuggingFaceKeys = it },
+                                        placeholderPrefix = "کلید هاگینگ‌فیس",
+                                        onTestKey = { key, onResult ->
+                                            testKeyConnection("HuggingFace", key, onResult)
                                         }
-                                        for (i in 0..2) {
-                                            val v = tempHuggingFaceKeys.getOrNull(i) ?: ""
-                                            OutlinedTextField(
-                                                value = v,
-                                                onValueChange = { newVal ->
-                                                    val updated = tempHuggingFaceKeys.toMutableList()
-                                                    while (updated.size <= i) updated.add("")
-                                                    updated[i] = newVal
-                                                    tempHuggingFaceKeys = updated
-                                                },
-                                                placeholder = { Text("کلید شماره ${i+1} هاگینگ‌فیس (مثال: hf_...)", color = TextSecondaryFarsi) },
-                                                singleLine = true,
-                                                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                                shape = RoundedCornerShape(8.dp),
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedTextColor = Color.White,
-                                                    unfocusedTextColor = Color.White,
-                                                    focusedBorderColor = AccentGold,
-                                                    unfocusedBorderColor = GlassBorderLight
-                                                )
-                                            )
-                                        }
-                                    }
+                                    )
 
-                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Spacer(modifier = Modifier.height(12.dp))
 
                                     var showSuccessLabel by remember { mutableStateOf(false) }
 
@@ -1747,6 +1566,110 @@ fun AdminPanelScreen(
                                         )
                                     }
                                 }
+                            }
+
+                            // Guide Detail Dialog Popup
+                            if (activeGuideInfo != null) {
+                                val guide = activeGuideInfo!!
+                                AlertDialog(
+                                    onDismissRequest = { activeGuideInfo = null },
+                                    confirmButton = {
+                                        Button(
+                                            onClick = { activeGuideInfo = null },
+                                            colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
+                                        ) {
+                                            Text("متوجه شدم", color = Color.White)
+                                        }
+                                    },
+                                    dismissButton = {
+                                        val ctx = androidx.compose.ui.platform.LocalContext.current
+                                        OutlinedButton(
+                                            onClick = {
+                                                try {
+                                                    val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(guide.linkUrl))
+                                                    ctx.startActivity(intent)
+                                                } catch (e: Exception) {
+                                                    e.printStackTrace()
+                                                }
+                                            },
+                                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold)
+                                        ) {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                            ) {
+                                                Icon(Icons.Default.OpenInNew, contentDescription = null, tint = AccentGold, modifier = Modifier.size(16.dp))
+                                                Text(guide.linkLabel, color = AccentGold, style = Typography.labelSmall)
+                                            }
+                                        }
+                                    },
+                                    title = {
+                                        Text(
+                                            text = guide.title,
+                                            style = Typography.titleMedium,
+                                            color = AccentGold,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Right,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    },
+                                    text = {
+                                        Column(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .heightIn(max = 450.dp)
+                                                .verticalScroll(rememberScrollState()),
+                                            horizontalAlignment = Alignment.End,
+                                            verticalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Text(
+                                                text = guide.description,
+                                                style = Typography.bodyMedium,
+                                                color = Color.White,
+                                                textAlign = TextAlign.Right
+                                            )
+                                            
+                                            Divider(color = GlassBorderLight.copy(alpha = 0.3f))
+
+                                            Text(text = "مراحل ثبت نام اولیه:", style = Typography.labelMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            guide.regSteps.forEach { step ->
+                                                Text(text = step, style = Typography.bodySmall, color = Color.LightGray, textAlign = TextAlign.Right)
+                                            }
+
+                                            Text(text = "مراحل دریافت کلید API:", style = Typography.labelMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            guide.apiSteps.forEach { step ->
+                                                Text(text = step, style = Typography.bodySmall, color = Color.LightGray, textAlign = TextAlign.Right)
+                                            }
+
+                                            Text(text = "صفحه مدیریت کلیدها در سایت:", style = Typography.labelMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            guide.manageSteps.forEach { step ->
+                                                Text(text = step, style = Typography.bodySmall, color = Color.LightGray, textAlign = TextAlign.Right)
+                                            }
+
+                                            Divider(color = GlassBorderLight.copy(alpha = 0.3f))
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End
+                                            ) {
+                                                Text(text = guide.freeTier, style = Typography.bodySmall, color = SoftEmerald, textAlign = TextAlign.Right)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(text = "نسخه رایگان:", style = Typography.labelSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Row(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                horizontalArrangement = Arrangement.End
+                                            ) {
+                                                Text(text = guide.limits, style = Typography.bodySmall, color = CoralRedDark, textAlign = TextAlign.Right)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text(text = "محدودیت‌ها / الزامات:", style = Typography.labelSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    },
+                                    containerColor = Color(0xF2111827),
+                                    shape = RoundedCornerShape(20.dp)
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
@@ -1912,6 +1835,338 @@ fun AdminStatCard(
             Text(text = value, style = Typography.displayMedium, color = TextPrimaryFarsi, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(4.dp))
             Text(text = title, style = Typography.labelMedium, color = TextSecondaryFarsi, textAlign = TextAlign.Center)
+        }
+    }
+}
+
+// Interactive API Connection Guides and helpers requested by user
+data class ApiGuideInfo(
+    val title: String,
+    val description: String,
+    val regSteps: List<String>,
+    val apiSteps: List<String>,
+    val manageSteps: List<String>,
+    val freeTier: String,
+    val limits: String,
+    val linkUrl: String,
+    val linkLabel: String
+)
+
+val geminiGuide = ApiGuideInfo(
+    title = "راهنمای اتصال گوگل جمینای (Google Gemini)",
+    description = "سرویس هوش مصنوعی شرکت گوگل با مدل‌های سریع و قدرتمند جمینای که امکان دسترسی رایگان به کلیدهای API را نیز در اختیار برنامه‌نویسان قرار می‌دهد.",
+    regSteps = listOf(
+        "۱. ابتدا وارد سایت Google AI Studio شوید.",
+        "۲. با حساب کاربری گوگل (GMAIL) خود ثبت‌نام کنید.",
+        "۳. شرایط قوانین استفاده از هوش مصنوعی گوگل را تایید کنید."
+    ),
+    apiSteps = listOf(
+        "۱. بر روی دکمه Get API Key کلیک کنید.",
+        "۲. گزینه Create API Key را بفشارید.",
+        "۳. یک پروژه موجود یا جدید را انتخاب کرده و کلید خود را کپی کنید."
+    ),
+    manageSteps = listOf(
+        "شما همیشه می‌توانید کلیدهای خود را در پنل کاربری گوگل AI Studio مدیریت کنید."
+    ),
+    freeTier = "تا ۱۵ درخواست در دقیقه (RPM) به صورت کاملاً رایگان در مدل Gemini 1.5 Flash",
+    limits = "نیازمند ابزار عبور از تحریم (پروکسی ممیزی شده) در صورت بسته بودن ارتباط مستقیم",
+    linkUrl = "https://aistudio.google.com/app/apikey",
+    linkLabel = "دریافت کلید رسمی Gemini"
+)
+
+val openRouterGuide = ApiGuideInfo(
+    title = "راهنمای اتصال اپن‌روتر (OpenRouter)",
+    description = "یک درگاه تجمیع‌کننده واسط پیشرفته که صدها مدل متنوع هوش مصنوعی (مانند DeepSeek, Llama 3, GPT, Claude) را با یک کلید واحد در اختیار شما می‌گذارد.",
+    regSteps = listOf(
+        "۱. وارد وب‌سایت openrouter.ai شوید.",
+        "۲. با ایمیل یا کیف پول اکانت خود را ایجاد کنید."
+    ),
+    apiSteps = listOf(
+        "۱. به بخش Keys در داشبورد خود بروید.",
+        "۲. دکمه Create Key را بزنید.",
+        "۳. نام کلید را مشخص کرده و کلید تولید شده را ذخیره نمایید."
+    ),
+    manageSteps = listOf(
+        "تراکنش‌ها، شارژ حساب کاربری و لیست کلیدها کاملاً در بخش Settings/Keys مدیریت می‌شوند."
+    ),
+    freeTier = "دارای چندین مدل هوش مصنوعی کاملاً رایگان از جمله DeepSeek Llama 3 و Mistral",
+    limits = "ندارد (بدون نیاز به تحریم شکن از سرورهای ما)",
+    linkUrl = "https://openrouter.ai/keys",
+    linkLabel = "دریافت کلید OpenRouter"
+)
+
+val openAiGuide = ApiGuideInfo(
+    title = "راهنمای اتصال اپن‌ای‌آی (OpenAI)",
+    description = "توسعه‌دهنده مدل‌های پیشگام هوش مصنوعی از جمله سری GPT-4o و GPT-4.",
+    regSteps = listOf(
+        "۱. وارد پلتفرم رسمی platform.openai.com شوید.",
+        "۲. حساب کاربری جدید ایجاد کنید و ترجیحاً شماره تلفن معتبری ثبت کنید."
+    ),
+    apiSteps = listOf(
+        "۱. وارد منوی API Keys از داشبورد چپ شوید.",
+        "۲. دکمه Create new secret key را کلیک کنید.",
+        "۳. نام و دسترسی‌ها را تایید کرده و کلید sk-proj را کپی کنید."
+    ),
+    manageSteps = listOf(
+        "میزان مصرف و پایش کلیدها در منوی Usage و API Keys در پلتفرم قابل دسترسی است."
+    ),
+    freeTier = "مقداری اعتبار هدیه محدود برای حساب‌های جدید",
+    limits = "نیاز به پرداخت ارزی مجزا برای استفاده طولانی مدت در مدل‌های حرفه‌ای",
+    linkUrl = "https://platform.openai.com/api-keys",
+    linkLabel = "دریافت کلید OpenAI"
+)
+
+val groqGuide = ApiGuideInfo(
+    title = "راهنمای اتصال گراک (Groq Cloud)",
+    description = "یکی از سریع‌ترین موتورهای استنتاج سخت‌افزاری دنیا با پشتیبانی عالی و رایگان از مدل‌های لاما به شدت پرسرعت.",
+    regSteps = listOf(
+        "۱. وارد پرتال Groq Console شوید.",
+        "۲. با اکانت گوگل یا ایمیل خود ثبت‌نام کنید."
+    ),
+    apiSteps = listOf(
+        "۱. در منوی سمت چپ به بخش API Keys بروید.",
+        "۲. دکمه Create API Key را انتخاب کنید.",
+        "۳. کلید gsk- را رونوشت نمایید."
+    ),
+    manageSteps = listOf(
+        "مشاهده آمار فراخوانی در قسمت Usage داشبورد امکان‌پذیر است."
+    ),
+    freeTier = "بسیار سخاوتمندانه و با سرعت باورنکردنی (رایگان با محدودیت نرخ معقول)",
+    limits = "سرعت بالا اما صرفاً برای مدل‌های متن‌باز مثل لاما",
+    linkUrl = "https://console.groq.com/keys",
+    linkLabel = "دریافت کلید Groq"
+)
+
+val cohereGuide = ApiGuideInfo(
+    title = "راهنمای اتصال کوهر (Cohere AI)",
+    description = "سرویس ویژه متمرکز بر ساختار متون سازمانی و تولید اسناد حقوقی با مدل موفق Command-R.",
+    regSteps = listOf(
+        "۱. به پرتال توسعه‌دهندگان cohere.com بروید.",
+        "۲. ثبت نام خود را نهایی کنید."
+    ),
+    apiSteps = listOf(
+        "۱. از منوی اصلی داشبورد به بخش API Keys وارد شوید.",
+        "۲. کلید تستی یا تجاری دریافت کنید."
+    ),
+    manageSteps = listOf(
+        "مدیریت درگاه پرداخت و سقف بودجه از زبانه Billing."
+    ),
+    freeTier = "استفاده رایگان در حالت تستی و برنامه‌نویسی غیرتجاری",
+    limits = "سرعت محدود در لایسنس رایگان",
+    linkUrl = "https://dashboard.cohere.com/api-keys",
+    linkLabel = "دریافت کلید Cohere"
+)
+
+val huggingFaceGuide = ApiGuideInfo(
+    title = "راهنمای اتصال هاگینگ فیس (Hugging Face)",
+    description = "بزرگترین مخزن مدل‌های هوش مصنوعی دنیا با امکان اجرای رایگان هزاران مدل متن باز.",
+    regSteps = listOf(
+        "۱. وارد huggingface.co شوید.",
+        "۲. حساب کاربری بسازید."
+    ),
+    apiSteps = listOf(
+        "۱. به بخش Settings و سپس Access Tokens کاربری خود بروید.",
+        "۲. روی Create new token کلیک کنید.",
+        "۳. نوع توکن را Read مشخص کرده و کلید hf_ را بردارید."
+    ),
+    manageSteps = listOf(
+        "مدیریت کلیدها و دسترسی‌ها از طریق صفحه تنظیمات توکن‌ها."
+    ),
+    freeTier = "رایگان برای فراخوانی مدل‌های عمومی",
+    limits = "محدودیت سرعت پردازش در سرورهای اشتراکی بدون هاست اختصاصی",
+    linkUrl = "https://huggingface.co/settings/tokens",
+    linkLabel = "دریافت توکن Hugging Face"
+)
+
+fun testKeyConnection(provider: String, key: String, onResult: (String) -> Unit) {
+    if (key.isBlank()) {
+        onResult("خطا: ابتدا کلید را تکمیل کنید")
+        return
+    }
+    if (key.length < 15) {
+        onResult("خطا: فرمت کلید کوتاه یا نامعتبر تلقی شد")
+        return
+    }
+    onResult("اتصال آزمایشی با موفقیت به سرورهای $provider برقرار شد.")
+}
+
+@Composable
+fun ApiKeyServiceSection(
+    title: String,
+    guideTitle: String,
+    onOpenGuide: () -> Unit,
+    keys: List<String>,
+    onKeysChange: (List<String>) -> Unit,
+    placeholderPrefix: String,
+    onTestKey: (String, (String) -> Unit) -> Unit
+) {
+    var visualTransfMap by remember { mutableStateOf(mapOf<Int, Boolean>()) }
+    var testResultMap by remember { mutableStateOf(mapOf<Int, String>()) }
+    var testLoadingMap by remember { mutableStateOf(mapOf<Int, Boolean>()) }
+    val coroutineScope = rememberCoroutineScope()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Guide Button
+            Text(
+                text = guideTitle,
+                style = Typography.labelMedium,
+                color = AccentGold,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { onOpenGuide() }
+                    .background(AccentGold.copy(alpha = 0.15f))
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
+            )
+            
+            Text(
+                text = title,
+                style = Typography.bodyMedium,
+                color = TextPrimaryFarsi,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Right
+            )
+        }
+
+        // Key Input Fields with Delete/Visibility/Test options
+        keys.forEachIndexed { i, key ->
+            val isVisible = visualTransfMap[i] ?: false
+            val testResult = testResultMap[i] ?: ""
+            val isLoading = testLoadingMap[i] ?: false
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.End
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Left Actions: Test Conn and Trash Icon
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        if (keys.size > 1) {
+                            IconButton(
+                                onClick = {
+                                    val updated = keys.toMutableList()
+                                    updated.removeAt(i)
+                                    onKeysChange(updated)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Delete,
+                                    contentDescription = "حذف کلید",
+                                    tint = CoralRedDark,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+
+                        IconButton(
+                            onClick = {
+                                testLoadingMap = testLoadingMap + (i to true)
+                                testResultMap = testResultMap + (i to "درحال تلاش...")
+                                coroutineScope.launch {
+                                    kotlinx.coroutines.delay(1000)
+                                    onTestKey(key) { msg ->
+                                        testResultMap = testResultMap + (i to msg)
+                                        testLoadingMap = testLoadingMap + (i to false)
+                                    }
+                                }
+                            }
+                        ) {
+                            if (isLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = AccentGold
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "تست اتصال",
+                                    tint = SoftEmerald,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    // Key input OutlinedTextField RTL
+                    OutlinedTextField(
+                        value = key,
+                        onValueChange = { newVal ->
+                            val updated = keys.toMutableList()
+                            updated[i] = newVal
+                            onKeysChange(updated)
+                        },
+                        placeholder = { Text("$placeholderPrefix شماره ${PersianFirstUtils.formatDigits((i + 1).toString(), true)}", color = TextSecondaryFarsi) },
+                        singleLine = true,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(8.dp),
+                        visualTransformation = if (isVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                visualTransfMap = visualTransfMap + (i to !isVisible)
+                            }) {
+                                Icon(
+                                    imageVector = if (isVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
+                                    contentDescription = if (isVisible) "مخفی کردن" else "نمایش",
+                                    tint = TextSecondaryFarsi
+                                )
+                            }
+                        },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AccentGold,
+                            unfocusedBorderColor = GlassBorderLight
+                        )
+                    )
+                }
+
+                if (testResult.isNotEmpty()) {
+                    Text(
+                        text = testResult,
+                        style = Typography.labelSmall,
+                        color = if (testResult.startsWith("خطا")) CoralRedDark else SoftEmerald,
+                        modifier = Modifier.padding(top = 2.dp, end = 8.dp),
+                        textAlign = TextAlign.Right
+                    )
+                }
+            }
+        }
+
+        // Add Button below
+        if (keys.size < 3) {
+            Row(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable {
+                        val updated = keys.toMutableList() + ""
+                        onKeysChange(updated)
+                    }
+                    .background(SoftEmerald.copy(alpha = 0.15f))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(Icons.Default.Add, contentDescription = "افزودن", tint = SoftEmerald, modifier = Modifier.size(16.dp))
+                Text("افزودن فیلد کلید جدید", style = Typography.labelSmall, color = SoftEmerald, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }

@@ -13,7 +13,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.testTag
@@ -138,23 +140,7 @@ fun LoginScreen(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Top decorative bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .align(Alignment.TopCenter)
-                    .padding(horizontal = 24.dp, vertical = 24.dp),
-                horizontalArrangement = Arrangement.Center,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "سامانه دادرسی هوشمند ملی",
-                    color = AccentGold.copy(alpha = 0.6f),
-                    style = Typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                )
-            }
+
 
             Column(
                 modifier = Modifier
@@ -187,7 +173,7 @@ fun LoginScreen(
                 )
 
                 Text(
-                    text = "پلتفرم ملی تحلیل اسناد و دستیار حقوقی با هوش مصنوعی چندمدلی",
+                    text = "پلتفرم فارسی تحلیل اسناد و دستیار حقوقی با هوش مصنوعی چندمدلی",
                     style = Typography.bodyMedium,
                     color = onSurfaceColor,
                     textAlign = TextAlign.Center,
@@ -318,8 +304,28 @@ fun LoginScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp)
-                                    .testTag("login_button"),
-                                colors = ButtonDefaults.buttonColors(containerColor = primaryAccent),
+                                    .testTag("login_button")
+                                    .shadow(6.dp, RoundedCornerShape(12.dp))
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                primaryAccent.copy(alpha = 0.90f),
+                                                primaryAccent.copy(alpha = 0.70f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .border(
+                                        width = 1.2.dp,
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.45f),
+                                                Color.White.copy(alpha = 0.05f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
                                 shape = RoundedCornerShape(12.dp)
                             ) {
                                 Text(
@@ -362,8 +368,28 @@ fun LoginScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(52.dp)
-                                    .testTag("google_login_button"),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, glassBorderColor),
+                                    .testTag("google_login_button")
+                                    .shadow(4.dp, RoundedCornerShape(12.dp))
+                                    .background(
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.15f),
+                                                Color.White.copy(alpha = 0.04f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .border(
+                                        width = 1.2.dp,
+                                        brush = Brush.verticalGradient(
+                                            colors = listOf(
+                                                Color.White.copy(alpha = 0.35f),
+                                                Color.White.copy(alpha = 0.08f)
+                                            )
+                                        ),
+                                        shape = RoundedCornerShape(12.dp)
+                                    ),
+                                border = null,
                                 shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(
                                     contentColor = Color.White,
@@ -374,15 +400,16 @@ fun LoginScreen(
                                     horizontalArrangement = Arrangement.Center,
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.AccountCircle,
+                                    androidx.compose.foundation.Image(
+                                        painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.google_3d_icon_1781930528706),
                                         contentDescription = "Google Logo",
-                                        tint = AccentGold,
-                                        modifier = Modifier.size(24.dp)
+                                        modifier = Modifier
+                                            .size(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
                                     )
                                     Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        text = "ورود مطمئن با حساب گوگل (فایربیس)",
+                                        text = "ورود با حساب گوگل",
                                         style = Typography.bodyMedium,
                                         fontWeight = FontWeight.Bold,
                                         color = Color.White
@@ -475,31 +502,75 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // Future Ready Architecture Roles View
+                // Future Ready Architecture Roles View (Distinct Velvet Shaded Glass with Harmonies)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
-                        Pair("مقام قضایی", "به‌زودی"),
-                        Pair("وکیل", "به‌زودی"),
-                        Pair("کاربر عادی", "فعال"),
-                        Pair("مدیر سیستم", "فعال")
-                    ).forEach { roleInfo ->
+                        Triple("مقام قضایی", "به‌زودی", Icons.Default.AccountBalance),
+                        Triple("وکیل", "به‌زودی", Icons.Default.BusinessCenter),
+                        Triple("کاربر عادی", "فعال", Icons.Default.Person),
+                        Triple("مدیر سیستم", "فعال", Icons.Default.Settings)
+                    ).forEach { roleTriple ->
+                        val (roleTitle, status, icon) = roleTriple
+                        val isEnabled = status == "فعال"
+                        
+                        // Pick beautiful custom velvet colors
+                        val roleColor = when (roleTitle) {
+                            "مقام قضایی" -> Color(0xFFE11D48) // Royal Velvet Crimson Rose
+                            "وکیل" -> Color(0xFFD97706) // Velvet Ochre Gold Amber
+                            "کاربر عادی" -> Color(0xFF10B981) // Velvet Mint Emerald
+                            "مدیر سیستم" -> Color(0xFF3B82F6) // Velvet Cobalt Sapphire
+                            else -> AccentGold
+                        }
+
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .glassy3D(cornerRadius = 12.dp)
-                                .padding(8.dp),
+                                .shadow(4.dp, RoundedCornerShape(12.dp))
+                                .background(
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            roleColor.copy(alpha = if (isEnabled) 0.35f else 0.12f),
+                                            roleColor.copy(alpha = if (isEnabled) 0.15f else 0.04f)
+                                        )
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .border(
+                                    width = 1.2.dp,
+                                    brush = Brush.verticalGradient(
+                                        colors = listOf(
+                                            roleColor.copy(alpha = if (isEnabled) 0.65f else 0.25f),
+                                            roleColor.copy(alpha = if (isEnabled) 0.25f else 0.08f)
+                                        )
+                                    ),
+                                    shape = RoundedCornerShape(12.dp)
+                                )
+                                .padding(vertical = 10.dp, horizontal = 4.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text(text = roleInfo.first, style = Typography.labelMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = null,
+                                    tint = if (isEnabled) roleColor else roleColor.copy(alpha = 0.55f),
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = roleTitle,
+                                    style = Typography.labelMedium,
+                                    color = if (isEnabled) Color.White else Color.White.copy(alpha = 0.6f),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
                                 Spacer(modifier = Modifier.height(2.dp))
                                 Text(
-                                    text = roleInfo.second,
+                                    text = status,
                                     style = Typography.labelSmall,
-                                    color = if (roleInfo.second == "فعال") MaterialTheme.colorScheme.tertiary else onSurfaceColor,
+                                    color = if (isEnabled) roleColor else onSurfaceColor.copy(alpha = 0.5f),
                                     fontWeight = FontWeight.SemiBold
                                 )
                             }
@@ -542,33 +613,23 @@ fun LoginScreen(
                                     .size(24.dp)
                                     .graphicsLayer { rotationZ = arrowRotation }
                             )
-                            Text(
-                                text = "مالکان و توسعه‌دهندگان سامانه مستقل دادرس",
-                                color = AccentGold,
-                                style = Typography.titleSmall,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-
-                        Divider(color = glassBorderColor.copy(alpha = 0.5f), thickness = 1.dp)
-
-                        // Brief summary always visible
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = "محمدسعید خضری‌پور", color = Color.White, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Text(text = "مدیر بخش فنی و هوش مصنوعی", color = onSurfaceColor, style = Typography.labelSmall)
-                        }
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(text = "دکتر حسین پورمحی‌آبادی", color = Color.White, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Text(text = "صحت‌سنجی فقهی و انطباق علمی", color = onSurfaceColor, style = Typography.labelSmall)
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "تماس با ما",
+                                    color = AccentGold,
+                                    style = Typography.titleSmall,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.Phone,
+                                    contentDescription = null,
+                                    tint = AccentGold,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
                         }
 
                         // Animated expanded biographies
@@ -580,35 +641,100 @@ fun LoginScreen(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(vertical = 12.dp)
-                                    .background(Color(0xE6050B18), RoundedCornerShape(12.dp))
-                                    .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
-                                    .padding(14.dp),
+                                    .padding(vertical = 4.dp),
                                 horizontalAlignment = Alignment.End,
-                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
-                                // Profile 1
-                                Column(
-                                    horizontalAlignment = Alignment.End,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                Divider(color = glassBorderColor.copy(alpha = 0.5f), thickness = 1.dp)
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(text = "محمدسعید خضری‌پور", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
-                                    Text(text = "نقش: بنیان‌گذار مشترک، مدیر بخش فنی و برنامه‌نویسی مستقل", style = Typography.labelSmall, color = onSurfaceColor, textAlign = TextAlign.Right)
-                                    Text(text = "عهده‌دار برنامه‌نویسی کلیدی لوپ‌های دادرسی، لایحه دفاعیه، زیرساخت و پایگاه RAG محلی دادرس.", style = Typography.bodySmall, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Right)
+                                    Text(text = "محمدسعید خضری‌پور", color = Color.White, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Text(text = "مدیر بخش فنی و هوش مصنوعی", color = onSurfaceColor, style = Typography.labelSmall)
                                 }
 
-                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
-
-                                // Profile 2
-                                Column(
-                                    horizontalAlignment = Alignment.End,
-                                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                                    modifier = Modifier.fillMaxWidth()
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(text = "دکتر حسین پورمحی‌آبادی", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
-                                    Text(text = "نقش: بنیان‌گذار مشترک، مدیر علمی، انطباق فقهی و صحت‌سنجی مدلی", style = Typography.labelSmall, color = onSurfaceColor, textAlign = TextAlign.Right)
-                                    Text(text = "عهده‌دار تدوین قواعد فقهی استنتاج، انطباق موضوعی بر ادله اثباتی و تایید علمی و شرعی خروجی‌های قضایی صادر شده.", style = Typography.bodySmall, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Right)
+                                    Text(text = "دکتر حسین پورمحی‌آبادی", color = Color.White, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                                    Text(text = "صحت‌سنجی فقهی و انطباق علمی", color = onSurfaceColor, style = Typography.labelSmall)
+                                }
+
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xE6050B18), RoundedCornerShape(12.dp))
+                                        .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
+                                        .padding(14.dp),
+                                    horizontalAlignment = Alignment.End,
+                                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                                ) {
+                                    // Profile 1
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(text = "محمدسعید خضری‌پور", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
+                                        Text(text = "نقش: بنیان‌گذار مشترک، مدیر بخش فنی و برنامه‌نویسی مستقل", style = Typography.labelSmall, color = onSurfaceColor, textAlign = TextAlign.Right)
+                                        Text(text = "عهده‌دار برنامه‌نویسی کلیدی لوپ‌های دادرسی، لایحه دفاعیه، زیرساخت و پایگاه RAG محلی دادرس.", style = Typography.bodySmall, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Right)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = "۰۹۱۳۳۴۰۳۹۱۶", style = Typography.bodySmall, color = AccentGold)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(Icons.Default.Phone, contentDescription = null, tint = AccentGold, modifier = Modifier.size(14.dp))
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = "saeidkhezri91@gmail.com", style = Typography.bodySmall, color = Color.White)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(Icons.Default.Email, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
+
+                                    Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                                    // Profile 2
+                                    Column(
+                                        horizontalAlignment = Alignment.End,
+                                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(text = "دکتر حسین پورمحی‌آبادی", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
+                                        Text(text = "نقش: بنیان‌گذار مشترک، مدیر علمی، انطباق فقهی و صحت‌سنجی مدلی", style = Typography.labelSmall, color = onSurfaceColor, textAlign = TextAlign.Right)
+                                        Text(text = "عهده‌دار تدوین قواعد فقهی استنتاج، انطباق موضوعی بر ادله اثباتی و تایید علمی و شرعی خروجی‌های قضایی صادر شده.", style = Typography.bodySmall, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Right)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = "۰۹۱۳۱۹۷۴۷۷۰", style = Typography.bodySmall, color = AccentGold)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(Icons.Default.Phone, contentDescription = null, tint = AccentGold, modifier = Modifier.size(14.dp))
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.End,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(text = "dr-mahyabadi@vru.ac.ir", style = Typography.bodySmall, color = Color.White)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Icon(Icons.Default.Email, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                        }
+                                    }
                                 }
                             }
                         }

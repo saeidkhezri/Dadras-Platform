@@ -1271,7 +1271,7 @@ class CitizenViewModel(application: Application) : AndroidViewModel(application)
                     date = getPersianDateNow()
                 )
             )
-            logDao.insertLog(ActivityLogEntity(username = userName, action = "ذخیره‌سازی پرونده حقوقی نهایی با نام $title در کارتابل ملی", date = getPersianDateNow()))
+            logDao.insertLog(ActivityLogEntity(username = userName, action = "ذخیره‌سازی پرونده حقوقی نهایی با نام $title در کارتابل کاربری", date = getPersianDateNow()))
             
             // ریست کردن فرم
             resetWizard()

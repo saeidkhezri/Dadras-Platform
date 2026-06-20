@@ -230,7 +230,7 @@ fun UniversalSystemMenu(
 
                                 item {
                                     QuickGridItem(
-                                        title = "کتابخانه ملی قوانین و مقررات مدنی",
+                                        title = "کتابخانه قوانین و مقررات مدنی",
                                         desc = "مرجع دسترسی الکترونیک به قوانین مجازات اسلامی، آیین دادرسی و مدنی کشور",
                                         icon = Icons.Default.LibraryBooks,
                                         onClick = {
@@ -254,7 +254,7 @@ fun UniversalSystemMenu(
 
                                 item {
                                     QuickGridItem(
-                                        title = "پروفایل هویت ملی کاربر",
+                                        title = "پروفایل هویت فارسی کاربر",
                                         desc = "اطلاعات هویتی ثنا، صندوق پیام‌ها و سطح تایید اعتبار کاربری",
                                         icon = Icons.Default.Person,
                                         onClick = {

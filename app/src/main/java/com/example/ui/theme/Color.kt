@@ -1,13 +1,20 @@
 package com.example.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.foundation.isSystemInDarkTheme
 
 // Elegant Judiciary & Apple-inspired glass palette
 val SlateNavyDark = Color(0xFF0F172A)
 val SlateNavyMedium = Color(0xFF1E293B)
 val SlateNavyLight = Color(0xFF334155)
 
-val AccentGold = Color(0xFFD4AF37) // Modern Gold for Justice / Scales
+val AccentGold: Color
+    @Composable
+    @ReadOnlyComposable
+    get() = if (isSystemInDarkTheme()) Color(0xFFD4AF37) else Color(0xFF854D0E) // Luxurious high-contrast bronze gold for light mode!
+
 val AccentGoldLight = Color(0xFFF3E5AB)
 
 // PROMPT APPLE iOS 26 LIQUID GLASS SPECIFICATION

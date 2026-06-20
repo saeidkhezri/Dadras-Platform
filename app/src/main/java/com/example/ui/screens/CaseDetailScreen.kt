@@ -77,7 +77,7 @@ fun CaseDetailScreen(
                             }
                         },
                         actions = {
-                            IconButton(onClick = { operationMsg = "کد رهگیری ملی پرونده به اشتراک گذاشته شد." }) {
+                            IconButton(onClick = { operationMsg = "کد رهگیری پرونده به اشتراک گذاشته شد." }) {
                                 Icon(Icons.Default.Share, contentDescription = "اشتراک‌گذاری", tint = AccentGold)
                             }
                         },

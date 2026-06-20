@@ -63,7 +63,8 @@ fun CitizenDashboardScreen(
     onTriggerSystemMenu: () -> Unit = {},
     onNavigateToWizard: () -> Unit,
     onNavigateToCase: (Int) -> Unit,
-    onNavigateToLibrary: () -> Unit
+    onNavigateToLibrary: () -> Unit,
+    onNavigateToAdmin: () -> Unit = {}
 ) {
     val session by authViewModel.session.collectAsState()
     val cases by citizenViewModel.cases.collectAsState()
@@ -91,6 +92,9 @@ fun CitizenDashboardScreen(
     var tempGroqKeys by remember(curGroqKeys) { mutableStateOf(curGroqKeys) }
     var tempCohereKeys by remember(curCohereKeys) { mutableStateOf(curCohereKeys) }
     var tempHuggingFaceKeys by remember(curHuggingFaceKeys) { mutableStateOf(curHuggingFaceKeys) }
+
+    val curProxyUrl by adminViewModel.geminiProxyUrl.collectAsState()
+    var tempProxyUrl by remember(curProxyUrl) { mutableStateOf(curProxyUrl) }
 
     val revealedKeys = remember { mutableStateMapOf<String, Boolean>() }
     var showGuideForProvider by remember { mutableStateOf<String?>(null) }
@@ -1050,9 +1054,9 @@ fun CitizenDashboardScreen(
                                                                     recordingFile = recorderHelper.startRecording()
                                                                     if (recordingFile != null) {
                                                                         isRecording = true
-                                                                        Toast.makeText(context, "ضبط صدا آغاز شد. صحبت کنید...", Toast.LENGTH_SHORT).show()
+                                                                        Toast.makeText(localContext, "ضبط صدا آغاز شد. صحبت کنید...", Toast.LENGTH_SHORT).show()
                                                                     } else {
-                                                                        Toast.makeText(context, "خطا در آغاز ضبط صدا.", Toast.LENGTH_SHORT).show()
+                                                                        Toast.makeText(localContext, "خطا در آغاز ضبط صدا.", Toast.LENGTH_SHORT).show()
                                                                     }
                                                                 }
                                                             },
@@ -1083,7 +1087,7 @@ fun CitizenDashboardScreen(
                                                                         }
                                                                     }
                                                                 } else {
-                                                                    Toast.makeText(context, "فایل صوتی یافت نشد.", Toast.LENGTH_SHORT).show()
+                                                                    Toast.makeText(localContext, "فایل صوتی یافت نشد.", Toast.LENGTH_SHORT).show()
                                                                 }
                                                             },
                                                             colors = ButtonDefaults.buttonColors(containerColor = SoftCrimson),
@@ -1151,8 +1155,8 @@ fun CitizenDashboardScreen(
                                                                 Icon(Icons.Default.Delete, contentDescription = "پاک کردن", tint = SoftCrimson)
                                                             }
                                                             IconButton(onClick = {
-                                                                copyToClipboard(context, "Transcribed Audio Text", transcribedText)
-                                                                Toast.makeText(context, "متن در حافظه موقت کپی شد.", Toast.LENGTH_SHORT).show()
+                                                                copyToClipboard(localContext, "Transcribed Audio Text", transcribedText)
+                                                                Toast.makeText(localContext, "متن در حافظه موقت کپی شد.", Toast.LENGTH_SHORT).show()
                                                             }) {
                                                                 Icon(Icons.Default.ContentCopy, contentDescription = "کپی", tint = AccentGold)
                                                             }
@@ -1165,7 +1169,7 @@ fun CitizenDashboardScreen(
                                                                 currentDocs.add(Pair("صوت_رونویسی_شده_${System.currentTimeMillis() / 1000}.txt", transcribedText))
                                                                 selectedAnalysisDocs = currentDocs
                                                                 activeTab = "analysis"
-                                                                Toast.makeText(context, "متن صوت با موفقیت به لیست اسناد دادرسی اضافه شد.", Toast.LENGTH_LONG).show()
+                                                                Toast.makeText(localContext, "متن صوت با موفقیت به لیست اسناد دادرسی اضافه شد.", Toast.LENGTH_LONG).show()
                                                             },
                                                             colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
                                                             shape = RoundedCornerShape(8.dp)
@@ -1342,7 +1346,7 @@ fun CitizenDashboardScreen(
                                                                     // Delete Action with safety
                                                                     IconButton(onClick = {
                                                                         citizenViewModel.deleteCase(case.id, session?.username ?: "کاربر عادی")
-                                                                        Toast.makeText(context, "پرونده حذف گردید.", Toast.LENGTH_SHORT).show()
+                                                                        Toast.makeText(localContext, "پرونده حذف گردید.", Toast.LENGTH_SHORT).show()
                                                                     }) {
                                                                         Icon(Icons.Default.Delete, contentDescription = "حذف مجرا", tint = SoftCrimson, modifier = Modifier.size(20.dp))
                                                                     }
@@ -1358,7 +1362,7 @@ fun CitizenDashboardScreen(
                                                                             withContext(Dispatchers.IO) {
                                                                                 db.caseDao().insertCase(duplicatedCase)
                                                                             }
-                                                                            Toast.makeText(context, "رونوشت با موفقیت ایجاد شد.", Toast.LENGTH_SHORT).show()
+                                                                            Toast.makeText(localContext, "رونوشت با موفقیت ایجاد شد.", Toast.LENGTH_SHORT).show()
                                                                         }
                                                                     }) {
                                                                         Icon(Icons.Default.CopyAll, contentDescription = "تکثیر سند", tint = AccentGold, modifier = Modifier.size(20.dp))
@@ -1366,8 +1370,8 @@ fun CitizenDashboardScreen(
 
                                                                     // Export Action (shares or copies content)
                                                                     IconButton(onClick = {
-                                                                        copyToClipboard(context, "Document Output", case.unifiedOutput)
-                                                                        Toast.makeText(context, "متن سند قضایی صادر و در کلیپ‌برد ذخیره شد.", Toast.LENGTH_SHORT).show()
+                                                                        copyToClipboard(localContext, "Document Output", case.unifiedOutput)
+                                                                        Toast.makeText(localContext, "متن سند قضایی صادر و در کلیپ‌برد ذخیره شد.", Toast.LENGTH_SHORT).show()
                                                                     }) {
                                                                         Icon(Icons.Default.ContentCopy, contentDescription = "کپی لایحه", tint = primaryColor, modifier = Modifier.size(20.dp))
                                                                     }
@@ -1396,6 +1400,7 @@ fun CitizenDashboardScreen(
                                 "settings" -> {
                                     var isOcrEnabled by remember { mutableStateOf(true) }
                                     var isVoicePromptEnabled by remember { mutableStateOf(false) }
+                                    var isContactsExpanded by remember { mutableStateOf(false) }
 
                                     Column(
                                         modifier = Modifier
@@ -1536,6 +1541,31 @@ fun CitizenDashboardScreen(
                                                 }
                                                 Divider(color = glassBorderColor)
                                                 
+                                                // Custom Proxy URL config field
+                                                Column(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                                    horizontalAlignment = Alignment.End
+                                                ) {
+                                                    Text("آدرس سرور پروکسی اختصاصی (اختیاری جهت رفع فیلترینگ):", style = Typography.labelMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                    Spacer(modifier = Modifier.height(4.dp))
+                                                    OutlinedTextField(
+                                                        value = tempProxyUrl,
+                                                        onValueChange = { tempProxyUrl = it },
+                                                        placeholder = { Text("https://generativelanguage.googleapis.com/... (درگاه Gemini)", color = onSurfaceColor.copy(alpha = 0.5f), fontSize = 11.sp) },
+                                                        textStyle = Typography.bodySmall.copy(textAlign = TextAlign.Left),
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        singleLine = true,
+                                                        colors = OutlinedTextFieldDefaults.colors(
+                                                            focusedTextColor = onBgColor,
+                                                            unfocusedTextColor = onBgColor,
+                                                            focusedBorderColor = AccentGold,
+                                                            unfocusedBorderColor = glassBorderColor
+                                                        )
+                                                    )
+                                                }
+
+                                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
                                                 if (apiKeysSavedSuccess) {
                                                     Card(
                                                         colors = CardDefaults.cardColors(containerColor = Color(0x334CAF50)),
@@ -1547,7 +1577,7 @@ fun CitizenDashboardScreen(
 
                                                 // Google Gemini key field style filling
                                                 ProviderApiSection(
-                                                    providerName = "Google AI Gemini",
+                                                    providerName = "Google AI Gemini (کنترل هوشمند)",
                                                     apiKeys = tempGeminiKeys,
                                                     fieldsToShow = 1,
                                                     revealedKeys = revealedKeys,
@@ -1573,6 +1603,66 @@ fun CitizenDashboardScreen(
                                                         tempOpenAiKeys = newList
                                                     },
                                                     onShowGuide = { showGuideForProvider = "openai" }
+                                                 )
+
+                                                 // OpenRouter API Section
+                                                 ProviderApiSection(
+                                                     providerName = "دروازه جامع OpenRouter",
+                                                     apiKeys = tempOpenRouterKeys,
+                                                     fieldsToShow = 1,
+                                                     revealedKeys = revealedKeys,
+                                                     onKeyChange = { index, value ->
+                                                         val newList = tempOpenRouterKeys.toMutableList()
+                                                         while (newList.size <= index) newList.add("")
+                                                         newList[index] = value
+                                                         tempOpenRouterKeys = newList
+                                                     },
+                                                     onShowGuide = { showGuideForProvider = "openrouter" }
+                                                 )
+
+                                                 // Groq API Section
+                                                 ProviderApiSection(
+                                                     providerName = "دروازه پرسرعت Groq (رایگان)",
+                                                     apiKeys = tempGroqKeys,
+                                                     fieldsToShow = 1,
+                                                     revealedKeys = revealedKeys,
+                                                     onKeyChange = { index, value ->
+                                                         val newList = tempGroqKeys.toMutableList()
+                                                         while (newList.size <= index) newList.add("")
+                                                         newList[index] = value
+                                                         tempGroqKeys = newList
+                                                     },
+                                                     onShowGuide = { showGuideForProvider = "groq" }
+                                                 )
+
+                                                 // Cohere API Section
+                                                 ProviderApiSection(
+                                                     providerName = "دروازه چندزبانه Cohere",
+                                                     apiKeys = tempCohereKeys,
+                                                     fieldsToShow = 1,
+                                                     revealedKeys = revealedKeys,
+                                                     onKeyChange = { index, value ->
+                                                         val newList = tempCohereKeys.toMutableList()
+                                                         while (newList.size <= index) newList.add("")
+                                                         newList[index] = value
+                                                         tempCohereKeys = newList
+                                                     },
+                                                     onShowGuide = { showGuideForProvider = "cohere" }
+                                                 )
+
+                                                 // HuggingFace API Section
+                                                 ProviderApiSection(
+                                                     providerName = "توکن محلی Hugging Face",
+                                                     apiKeys = tempHuggingFaceKeys,
+                                                     fieldsToShow = 1,
+                                                     revealedKeys = revealedKeys,
+                                                     onKeyChange = { index, value ->
+                                                         val newList = tempHuggingFaceKeys.toMutableList()
+                                                         while (newList.size <= index) newList.add("")
+                                                         newList[index] = value
+                                                         tempHuggingFaceKeys = newList
+                                                     },
+                                                     onShowGuide = { showGuideForProvider = "huggingface" }
                                                 )
 
                                                 Button(
@@ -1583,7 +1673,7 @@ fun CitizenDashboardScreen(
                                                             openAi = tempOpenAiKeys,
                                                             groq = tempGroqKeys,
                                                             cohere = tempCohereKeys,
-                                                            huggingFace = tempHuggingFaceKeys
+                                                            huggingFace = tempHuggingFaceKeys, proxyUrl = tempProxyUrl
                                                         )
                                                         apiKeysSavedSuccess = true
                                                         scope.launch {
@@ -1598,6 +1688,155 @@ fun CitizenDashboardScreen(
                                                 }
                                             }
                                         }
+
+                                        Spacer(modifier = Modifier.height(12.dp))
+
+                                        // Collapsible Contact Us (تماس با ما) Section
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable { isContactsExpanded = !isContactsExpanded },
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.4f)),
+                                            shape = RoundedCornerShape(16.dp)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(16.dp),
+                                                horizontalAlignment = Alignment.End,
+                                                verticalArrangement = Arrangement.spacedBy(10.dp)
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    val arrowRotation by androidx.compose.animation.core.animateFloatAsState(
+                                                        targetValue = if (isContactsExpanded) 180f else 0f,
+                                                        label = "arrowRotation"
+                                                    )
+                                                    Icon(
+                                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                                        contentDescription = null,
+                                                        tint = AccentGold,
+                                                        modifier = Modifier
+                                                            .size(24.dp)
+                                                            .graphicsLayer { rotationZ = arrowRotation }
+                                                    )
+                                                    Text(
+                                                        text = "تماس با ما",
+                                                        color = AccentGold,
+                                                        style = Typography.titleMedium,
+                                                        fontWeight = FontWeight.Bold
+                                                    )
+                                                }
+
+                                                AnimatedVisibility(
+                                                    visible = isContactsExpanded,
+                                                    enter = expandVertically() + fadeIn(),
+                                                    exit = shrinkVertically() + fadeOut()
+                                                ) {
+                                                    Column(
+                                                        modifier = Modifier
+                                                            .fillMaxWidth()
+                                                            .padding(vertical = 4.dp),
+                                                        horizontalAlignment = Alignment.End,
+                                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                                    ) {
+                                                        Divider(color = glassBorderColor.copy(alpha = 0.5f), thickness = 1.dp)
+
+                                                        Column(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .background(Color(0xE6050B18), RoundedCornerShape(12.dp))
+                                                                .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
+                                                                .padding(14.dp),
+                                                            horizontalAlignment = Alignment.End,
+                                                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                                                        ) {
+                                                            // Profile 1
+                                                            Column(
+                                                                horizontalAlignment = Alignment.End,
+                                                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                                                modifier = Modifier.fillMaxWidth()
+                                                            ) {
+                                                                Text(text = "محمدسعید خضری‌پور", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
+                                                                Text(text = "نقش: بنیان‌گذار مشترک، مدیر بخش فنی و برنامه‌نویسی مستقل", style = Typography.labelSmall, color = onSurfaceColor, textAlign = TextAlign.Right)
+                                                                Text(text = "عهده‌دار برنامه‌نویسی کلیدی لوپ‌های دادرسی، لایحه دفاعیه، زیرساخت و پایگاه RAG محلی دادرس.", style = Typography.bodySmall, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Right)
+                                                                Spacer(modifier = Modifier.height(4.dp))
+                                                                Row(
+                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                    horizontalArrangement = Arrangement.End,
+                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                ) {
+                                                                    Text(text = "۰۹۱۳۳۴۰۳۹۱۶", style = Typography.bodySmall, color = AccentGold)
+                                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                                    Icon(Icons.Default.Phone, contentDescription = null, tint = AccentGold, modifier = Modifier.size(14.dp))
+                                                                }
+                                                                Row(
+                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                    horizontalArrangement = Arrangement.End,
+                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                ) {
+                                                                    Text(text = "saeidkhezri91@gmail.com", style = Typography.bodySmall, color = Color.White)
+                                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                                    Icon(Icons.Default.Email, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                                                }
+                                                            }
+
+                                                            Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                                                            // Profile 2
+                                                            Column(
+                                                                horizontalAlignment = Alignment.End,
+                                                                verticalArrangement = Arrangement.spacedBy(4.dp),
+                                                                modifier = Modifier.fillMaxWidth()
+                                                            ) {
+                                                                Text(text = "دکتر حسین پورمحی‌آبادی", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold, textAlign = TextAlign.Right)
+                                                                Text(text = "نقش: بنیان‌گذار مشترک، مدیر علمی، انطباق فقهی و صحت‌سنجی مدلی", style = Typography.labelSmall, color = onSurfaceColor, textAlign = TextAlign.Right)
+                                                                Text(text = "عهده‌دار تدوین قواعد فقهی استنتاج، انطباق موضوعی بر ادله اثباتی و تایید علمی و شرعی خروجی‌های قضایی صادر شده.", style = Typography.bodySmall, color = Color.White.copy(alpha = 0.85f), textAlign = TextAlign.Right)
+                                                                Spacer(modifier = Modifier.height(4.dp))
+                                                                Row(
+                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                    horizontalArrangement = Arrangement.End,
+                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                ) {
+                                                                    Text(text = "۰۹۱۳۱۹۷۴۷۷۰", style = Typography.bodySmall, color = AccentGold)
+                                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                                    Icon(Icons.Default.Phone, contentDescription = null, tint = AccentGold, modifier = Modifier.size(14.dp))
+                                                                }
+                                                                Row(
+                                                                    modifier = Modifier.fillMaxWidth(),
+                                                                    horizontalArrangement = Arrangement.End,
+                                                                    verticalAlignment = Alignment.CenterVertically
+                                                                ) {
+                                                                    Text(text = "dr-mahyabadi@vru.ac.ir", style = Typography.bodySmall, color = Color.White)
+                                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                                    Icon(Icons.Default.Email, contentDescription = null, tint = Color.LightGray, modifier = Modifier.size(14.dp))
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        if (session?.role == com.example.viewmodel.UserRole.ADMIN) {
+                                            Spacer(modifier = Modifier.height(12.dp))
+                                            Text("مدیریت سیستم دادرس (مخصوص مدیران ارشد):", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            Button(
+                                                onClick = { onNavigateToAdmin() },
+                                                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                                modifier = Modifier.fillMaxWidth().height(48.dp),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Text("ورود مستقیم به پنل مدیریت کل کشور", color = Color.Black, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                        
+                                        // Dummy wrapper card to neatly align with the existing file's nesting closing brackets
+
                                     }
                                 }
                             }
@@ -1693,8 +1932,8 @@ fun CitizenDashboardScreen(
 
                                 Button(
                                     onClick = {
-                                        copyToClipboard(context, "Unified Output", c.unifiedOutput)
-                                        Toast.makeText(context, "متن سند قضایی صادر و در حافظه کپی شد.", Toast.LENGTH_SHORT).show()
+                                        copyToClipboard(localContext, "Unified Output", c.unifiedOutput)
+                                        Toast.makeText(localContext, "متن سند قضایی صادر و در حافظه کپی شد.", Toast.LENGTH_SHORT).show()
                                     },
                                     colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
                                     modifier = Modifier.fillMaxWidth()
@@ -1776,7 +2015,7 @@ fun CitizenDashboardScreen(
                                     Button(
                                         onClick = {
                                             if (repositoryManualTitle.isBlank() || repositoryManualContent.isBlank()) {
-                                                Toast.makeText(context, "لطفا تمام موارد را پر کنید", Toast.LENGTH_SHORT).show()
+                                                Toast.makeText(localContext, "لطفا تمام موارد را پر کنید", Toast.LENGTH_SHORT).show()
                                             } else {
                                                 scope.launch {
                                                     val entity = LegalResourceEntity(
@@ -1789,7 +2028,7 @@ fun CitizenDashboardScreen(
                                                     withContext(Dispatchers.IO) {
                                                         db.resourceDao().insertResources(listOf(entity))
                                                     }
-                                                    Toast.makeText(context, "قانون ثبت دستی شد و به پایگاه افزوده گردید.", Toast.LENGTH_SHORT).show()
+                                                    Toast.makeText(localContext, "قانون ثبت دستی شد و به پایگاه افزوده گردید.", Toast.LENGTH_SHORT).show()
                                                     repositoryManualTitle = ""
                                                     repositoryManualContent = ""
                                                     showAddManualResourceDialog = false
@@ -2016,7 +2255,7 @@ fun CollapsibleNewRequestTab(
                 ) {
                     Divider(color = glassBorderColor.copy(alpha = 0.5f))
                     Text(
-                        text = "دستیار صادرکننده لایحه دادرس ملی آماده هدایت پرونده، دادخواست، شکواییه یا اظهارنامه قضایی به صورت تمام خودکار و هوشمند است.",
+                        text = "دستیار صادرکننده لایحه دادرس فارسی آماده هدایت پرونده، دادخواست، شکواییه یا اظهارنامه قضایی به صورت تمام خودکار و هوشمند است.",
                         style = Typography.bodySmall,
                         color = onSurfaceColor,
                         textAlign = TextAlign.Right,

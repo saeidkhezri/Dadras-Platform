@@ -74,7 +74,6 @@ class MainActivity : ComponentActivity() {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(innerPadding)
                     ) {
                         NavHost(
                             navController = navController,
@@ -116,7 +115,8 @@ class MainActivity : ComponentActivity() {
                                     onTriggerSystemMenu = { isUniversalMenuOpen = true },
                                     onNavigateToWizard = { navController.navigate("wizard") },
                                     onNavigateToCase = { id -> navController.navigate("case_detail/$id") },
-                                    onNavigateToLibrary = { navController.navigate("library") }
+                                    onNavigateToLibrary = { navController.navigate("library") },
+                                    onNavigateToAdmin = { navController.navigate("admin_panel") }
                                 )
                             }
 
@@ -132,7 +132,7 @@ class MainActivity : ComponentActivity() {
 
                             // ۴. کتابخانه قوانین
                             composable("library") {
-                                currentScreenName = "کتابخانه قوانین ملی"
+                                currentScreenName = "کتابخانه قوانین فارسی"
                                 LibraryScreen(
                                     citizenViewModel = citizenViewModel,
                                     authViewModel = authViewModel,
@@ -180,44 +180,6 @@ class MainActivity : ComponentActivity() {
                                 copilotViewModel = copilotViewModel,
                                 currentScreenName = currentScreenName
                             )
-
-                            // منوی فرادست سراسری سیستم (شناور بر تمامی صفحات و کارتابل‌ها)
-                            com.example.ui.components.UniversalSystemMenu(
-                                authViewModel = authViewModel,
-                                adminViewModel = adminViewModel,
-                                isOpen = isUniversalMenuOpen,
-                                onClose = { isUniversalMenuOpen = false },
-                                onNavigateToCitizenTab = { tabId ->
-                                    navController.navigate("dashboard?tab=$tabId") {
-                                        popUpTo("dashboard?tab={tab}") { inclusive = false }
-                                        launchSingleTop = true
-                                    }
-                                },
-                                navController = navController
-                            )
-
-                            // دکمه شناور ارگونومیک فعال‌سازی منوی سراسری فرادست دادرس (طراحی شیشه‌ای لوکس در پایین چپ)
-                            Box(
-                                modifier = Modifier
-                                    .align(androidx.compose.ui.Alignment.BottomStart)
-                                    .padding(start = 16.dp, bottom = 100.dp)
-                            ) {
-                                FloatingActionButton(
-                                    onClick = { isUniversalMenuOpen = !isUniversalMenuOpen },
-                                    containerColor = com.example.ui.theme.AccentGold,
-                                    contentColor = Color.Black,
-                                    shape = androidx.compose.foundation.shape.CircleShape,
-                                    modifier = Modifier
-                                        .size(56.dp)
-                                        .testTag("universal_system_menu_fab")
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = "Universal Menu Settings",
-                                        modifier = Modifier.size(26.dp)
-                                    )
-                                }
-                            }
                         }
                     }
                 }
