@@ -48,6 +48,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         com.example.network.AiOrchestrator.appContext = applicationContext
         com.example.network.AiOrchestrator.loadKeysFromPrefs(applicationContext)
+        com.example.network.FirebaseService.initialize(applicationContext)
         enableEdgeToEdge()
         setContent {
             val authViewModel: AuthViewModel = viewModel()

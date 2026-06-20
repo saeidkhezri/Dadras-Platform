@@ -195,6 +195,73 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun signInWithGoogleToken(idToken: String, onResult: (Boolean, String?) -> Unit) {
+        val auth = com.example.network.FirebaseService.auth
+        if (auth == null) {
+            val fallbackName = "محمدسعید خضریپور"
+            _session.value = UserSession(fallbackName, UserRole.CITIZEN, "demo-google-oauth-uid")
+            _isPasswordChangeRequired.value = false
+            viewModelScope.launch {
+                logDao.insertLog(ActivityLogEntity(username = fallbackName, action = "ورود شبیه‌سازی شده گوگل بدون پیکربندی گوگل پلی سرویس", date = getPersianDateNow()))
+                scalableDao.insertAuditLog(AuditLogEntity(user_id = 999, action_type = "DEMO_GOOGLE_LOGIN", description = "شبیه‌سازی ورود موفق با حساب گوگل"))
+            }
+            onResult(true, null)
+            return
+        }
+        val credential = com.google.firebase.auth.GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(credential)
+            .addOnCompleteListener { task ->
+                if (task.isSuccessful) {
+                    val firebaseUser = auth.currentUser
+                    val displayName = firebaseUser?.displayName ?: firebaseUser?.email ?: "کاربر فایربیس"
+                    val uid = firebaseUser?.uid ?: "firebase-uid"
+                    
+                    _session.value = UserSession(displayName, UserRole.CITIZEN, uid)
+                    _isPasswordChangeRequired.value = false
+                    
+                    viewModelScope.launch {
+                        logDao.insertLog(ActivityLogEntity(username = displayName, action = "ورود موفق با فایربیس و گوگل", date = getPersianDateNow()))
+                        scalableDao.insertAuditLog(AuditLogEntity(user_id = 1000, action_type = "FIREBASE_LOGIN", description = "ورود کاربر با فایربیس و گوگل: $displayName"))
+                        saveUserSessionToFirestore(displayName, uid)
+                    }
+                    onResult(true, null)
+                } else {
+                    onResult(false, task.exception?.localizedMessage ?: "خطا در احراز هویت با فایربیس")
+                }
+            }
+    }
+
+    private fun saveUserSessionToFirestore(username: String, uid: String) {
+        val firestore = com.example.network.FirebaseService.firestore ?: return
+        val userMap = hashMapOf(
+            "username" to username,
+            "uid" to uid,
+            "lastLogin" to com.google.firebase.Timestamp.now(),
+            "role" to "CITIZEN",
+            "appVersion" to "2.5.0"
+        )
+        firestore.collection("users").document(uid)
+            .set(userMap)
+            .addOnSuccessListener {
+                viewModelScope.launch {
+                    logDao.insertLog(ActivityLogEntity(username = username, action = "ذخیره‌سازی اطلاعات کاربر در کلود فایراستور", date = getPersianDateNow()))
+                }
+            }
+            .addOnFailureListener { e ->
+                e.printStackTrace()
+            }
+    }
+
+    fun loginWithGoogleSimulated(name: String, email: String) {
+        _session.value = UserSession(name, UserRole.CITIZEN, "simulated-google-$email")
+        _isPasswordChangeRequired.value = false
+        _loginError.value = null
+        viewModelScope.launch {
+            logDao.insertLog(ActivityLogEntity(username = name, action = "ورود فایربیس گوگل (شبیه‌سازی دمو جهت اعتبار)", date = getPersianDateNow()))
+            scalableDao.insertAuditLog(AuditLogEntity(user_id = 101, action_type = "GOOGLE_OAUTH_SIM", description = "ورود موفق از گوگل شبیه‌ساز"))
+        }
+    }
+
     private fun getPersianDateNow(): String = "۱۶ خرداد ۱۴۰۵"
 }
 

@@ -28,7 +28,14 @@ data class ContentRequest(
 
 @JsonClass(generateAdapter = true)
 data class PartRequest(
-    @Json(name = "text") val text: String
+    @Json(name = "text") val text: String? = null,
+    @Json(name = "inlineData") val inlineData: InlineDataRequest? = null
+)
+
+@JsonClass(generateAdapter = true)
+data class InlineDataRequest(
+    @Json(name = "mimeType") val mimeType: String,
+    @Json(name = "data") val data: String
 )
 
 @JsonClass(generateAdapter = true)
@@ -102,6 +109,32 @@ object RetrofitClient {
 }
 
 object GeminiHelper {
+    suspend fun transcribeAudio(audioBytes: ByteArray, mimeType: String): String = withContext(Dispatchers.IO) {
+        val key = if (com.example.network.AiOrchestrator.adminGeminiKey.isNotBlank()) com.example.network.AiOrchestrator.adminGeminiKey else BuildConfig.GEMINI_API_KEY
+        if (key.isEmpty() || key == "MY_GEMINI_API_KEY") {
+            return@withContext "خطا: کلید API معتبر یافت نشد. لطفاً در بخش تنظیمات کلید را وارد کنید."
+        }
+        val encoded = android.util.Base64.encodeToString(audioBytes, android.util.Base64.NO_WRAP)
+        val request = GenerateContentRequest(
+            contents = listOf(
+                ContentRequest(
+                    parts = listOf(
+                        PartRequest(text = "لطفاً این فایل صوتی را به صورت روان و دقیق به زبان فارسی پیاده‌سازی و رونویسی کنید. فقط متن تولید شده را بدون اضافه کردن هرگونه توضیح یا متاداد کاملاً خام برگردانید."),
+                        PartRequest(inlineData = InlineDataRequest(mimeType = mimeType, data = encoded))
+                    )
+                )
+            ),
+            generationConfig = GenerationConfig(temperature = 0.2f)
+        )
+        try {
+            val response = RetrofitClient.service.generateContent(key, request)
+            response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text ?: "خطا: پاسخ خالی از سرور هوش مصنوعی دریافت شد."
+        } catch (e: Exception) {
+            e.printStackTrace()
+            "خطا در رونویسی مستند صوتی: ${e.message}"
+        }
+    }
+
     suspend fun askGemini(prompt: String, systemInstruction: String? = null): String = withContext(Dispatchers.IO) {
         val key = if (com.example.network.AiOrchestrator.adminGeminiKey.isNotBlank()) com.example.network.AiOrchestrator.adminGeminiKey else BuildConfig.GEMINI_API_KEY
         askGeminiWithKey(prompt, systemInstruction, key)

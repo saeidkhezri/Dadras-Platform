@@ -1,19 +1,16 @@
 package com.example.ui.screens
 
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 import androidx.compose.animation.*
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -24,26 +21,44 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.window.Dialog
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import android.net.Uri
+import android.widget.Toast
+import android.provider.OpenableColumns
+import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+
 import com.example.data.CaseEntity
+import com.example.data.LegalResourceEntity
+import com.example.data.AppDatabase
 import com.example.ui.components.FrostedGlassBackground
 import com.example.ui.components.glassy3D
+import com.example.ui.components.PersianFirstUtils
 import com.example.ui.theme.*
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.CitizenViewModel
+import com.example.viewmodel.AdminViewModel
+import com.example.utils.DocumentProcessor
+import com.example.network.AiOrchestrator
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CitizenDashboardScreen(
     authViewModel: AuthViewModel,
     citizenViewModel: CitizenViewModel,
-    adminViewModel: com.example.viewmodel.AdminViewModel,
+    adminViewModel: AdminViewModel,
     initialTab: String = "dashboard",
     onTriggerSystemMenu: () -> Unit = {},
     onNavigateToWizard: () -> Unit,
@@ -53,12 +68,16 @@ fun CitizenDashboardScreen(
     val session by authViewModel.session.collectAsState()
     val cases by citizenViewModel.cases.collectAsState()
     val notifications by citizenViewModel.notifications.collectAsState()
+    val legalResources by citizenViewModel.legalResources.collectAsState()
     val isDark by authViewModel.isDarkTheme.collectAsState()
     val isDynamicBg by authViewModel.isDynamicBackground.collectAsState()
+    val isPersianNumbersEnabled by authViewModel.isPersianNumbersEnabled.collectAsState()
 
-    var activeTab by remember(initialTab) { mutableStateOf(initialTab) } // dashboard, cases, research, timeline, notifications, profile, settings
+    // Primary 5 Navigation Tabs
+    var activeTab by remember(initialTab) { mutableStateOf(initialTab) } // "dashboard", "repository", "analysis", "cases", "settings"
     var searchQuery by remember { mutableStateOf("") }
 
+    // API Key states
     val curGeminiKeys by adminViewModel.geminiApiKeys.collectAsState()
     val curOpenRouterKeys by adminViewModel.openrouterApiKeys.collectAsState()
     val curOpenAiKeys by adminViewModel.openaiApiKeys.collectAsState()
@@ -73,54 +92,66 @@ fun CitizenDashboardScreen(
     var tempCohereKeys by remember(curCohereKeys) { mutableStateOf(curCohereKeys) }
     var tempHuggingFaceKeys by remember(curHuggingFaceKeys) { mutableStateOf(curHuggingFaceKeys) }
 
-    var geminiFieldsToShow by remember(curGeminiKeys) {
-        mutableStateOf(
-            if (curGeminiKeys.getOrNull(2)?.isNotBlank() == true) 3
-            else if (curGeminiKeys.getOrNull(1)?.isNotBlank() == true) 2
-            else 1
-        )
-    }
-    var openRouterFieldsToShow by remember(curOpenRouterKeys) {
-        mutableStateOf(
-            if (curOpenRouterKeys.getOrNull(2)?.isNotBlank() == true) 3
-            else if (curOpenRouterKeys.getOrNull(1)?.isNotBlank() == true) 2
-            else 1
-        )
-    }
-    var openAiFieldsToShow by remember(curOpenAiKeys) {
-        mutableStateOf(
-            if (curOpenAiKeys.getOrNull(2)?.isNotBlank() == true) 3
-            else if (curOpenAiKeys.getOrNull(1)?.isNotBlank() == true) 2
-            else 1
-        )
-    }
-    var groqFieldsToShow by remember(curGroqKeys) {
-        mutableStateOf(
-            if (curGroqKeys.getOrNull(2)?.isNotBlank() == true) 3
-            else if (curGroqKeys.getOrNull(1)?.isNotBlank() == true) 2
-            else 1
-        )
-    }
-    var cohereFieldsToShow by remember(curCohereKeys) {
-        mutableStateOf(
-            if (curCohereKeys.getOrNull(2)?.isNotBlank() == true) 3
-            else if (curCohereKeys.getOrNull(1)?.isNotBlank() == true) 2
-            else 1
-        )
-    }
-    var huggingFaceFieldsToShow by remember(curHuggingFaceKeys) {
-        mutableStateOf(
-            if (curHuggingFaceKeys.getOrNull(2)?.isNotBlank() == true) 3
-            else if (curHuggingFaceKeys.getOrNull(1)?.isNotBlank() == true) 2
-            else 1
-        )
-    }
-
     val revealedKeys = remember { mutableStateMapOf<String, Boolean>() }
     var showGuideForProvider by remember { mutableStateOf<String?>(null) }
     var apiKeysSavedSuccess by remember { mutableStateOf(false) }
-    var prevTabBeforeApis by remember { mutableStateOf("settings") }
-    
+
+    // Analysis Tab states
+    var selectedAnalysisDocs by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
+    var isAnalysisWorking by remember { mutableStateOf(false) }
+    var analysisProgressText by remember { mutableStateOf("") }
+    var generatedReportText by remember { mutableStateOf<String?>(null) }
+    var generatedReportTitle by remember { mutableStateOf("") }
+    var enableRagGrounding by remember { mutableStateOf(true) }
+    var selectedAnalysisProvider by remember { mutableStateOf("Gemini 1.5 Pro") }
+
+    // Repository Tab states
+    var repositorySearchQuery by remember { mutableStateOf("") }
+    var repositorySelectedCategory by remember { mutableStateOf("همه") }
+    var repositoryManualTitle by remember { mutableStateOf("") }
+    var repositoryManualCategory by remember { mutableStateOf("قانون مدنی") }
+    var repositoryManualContent by remember { mutableStateOf("") }
+    var showAddManualResourceDialog by remember { mutableStateOf(false) }
+    var isRepositoryActionLoading by remember { mutableStateOf(false) }
+
+    // Cases Tab sorting and filtering states
+    var caseTypeFilter by remember { mutableStateOf("همه") }
+    var caseSortOrder by remember { mutableStateOf("جدیدترین") } // "جدیدترین", "قدیمی‌ترین", "الفبایی الف-ی", "بالاترین امتیاز"
+
+    // Dialog state for viewing full previous document history details
+    var activeViewingCase by remember { mutableStateOf<CaseEntity?>(null) }
+
+    val scope = rememberCoroutineScope()
+    val localContext = LocalContext.current
+
+    // Transcribing features
+    val recorderHelper = remember { com.example.utils.AudioRecorderHelper(localContext) }
+    var isRecording by remember { mutableStateOf(false) }
+    var recordingFile by remember { mutableStateOf<java.io.File?>(null) }
+    var transcribedText by remember { mutableStateOf("") }
+    var isTranscribingWorking by remember { mutableStateOf(false) }
+    var hasMicPermission by remember { mutableStateOf(false) }
+
+    val micPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        hasMicPermission = isGranted
+        if (isGranted) {
+            Toast.makeText(localContext, "مجوز دسترسی به میکروفون صادر شد.", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(localContext, "دسترسی به میکروفون جهت ضبط شواهد کلامی الزامی است.", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val currentPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            localContext,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        hasMicPermission = currentPermission
+    }
+    val db: com.example.data.AppDatabase = remember { com.example.data.AppDatabase.getDatabase(localContext) }
+
     // Theme-specific glass styles
     val surfaceColor = MaterialTheme.colorScheme.surface
     val onBgColor = MaterialTheme.colorScheme.onBackground
@@ -128,1379 +159,1647 @@ fun CitizenDashboardScreen(
     val primaryColor = MaterialTheme.colorScheme.primary
     val glassBorderColor = if (isDark) GlassBorderDark else Color(0x33000000)
 
-    val filteredCases = cases.filter {
-        it.title.contains(searchQuery) || it.type.contains(searchQuery) || it.legalPosition.contains(searchQuery)
+    // File Pickers
+    val analysisFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetMultipleContents()
+    ) { uris ->
+        if (uris.isNotEmpty()) {
+            scope.launch {
+                isAnalysisWorking = true
+                analysisProgressText = "در حال تحلیل و استخراج متون اسناد مستقل..."
+                val currentDocs = selectedAnalysisDocs.toMutableList()
+                for (uri in uris) {
+                    val name = getFileName(localContext, uri)
+                    val text = DocumentProcessor.extractTextFromUri(localContext, uri, name)
+                    currentDocs.add(Pair(name, text))
+                }
+                selectedAnalysisDocs = currentDocs
+                isAnalysisWorking = false
+                Toast.makeText(localContext, "تعداد ${uris.size} سند با موفقیت بارگذاری شد.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
-    FrostedGlassBackground {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            val isWideScreen = maxWidth > 850.dp
+    val repositoryFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                isRepositoryActionLoading = true
+                val name = getFileName(localContext, uri)
+                val text = DocumentProcessor.extractTextFromUri(localContext, uri, name)
+                val lang = DocumentProcessor.detectLanguage(text)
+                
+                val category = when {
+                    name.contains("کیفری") || name.contains("مجازات") || name.contains("جزایی") -> "قانون مجازات"
+                    name.contains("خانواده") || name.contains("ازدواج") || name.contains("طلاق") -> "حقوق خانواده"
+                    name.contains("تجاری") || name.contains("شرکت") || name.contains("چک") -> "قوانین تجاری"
+                    else -> "قانون مدنی"
+                }
 
-            Row(modifier = Modifier.fillMaxSize()) {
-                // DESKTOP LEFT SIDEBAR
-                if (isWideScreen) {
-                    Column(
-                        modifier = Modifier
-                            .width(260.dp)
-                            .fillMaxHeight()
-                            .background(surfaceColor)
-                            .border(1.dp, glassBorderColor)
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        horizontalAlignment = Alignment.End
-                    ) {
-                        // Header / Identity
-                        Row(
+                val entity = LegalResourceEntity(
+                    title = name.substringBeforeLast("."),
+                    category = category,
+                    description = "استخراج ساخت یافته ($lang)",
+                    content = text,
+                    articleNo = "سند پیوستی"
+                )
+
+                withContext(Dispatchers.IO) {
+                    db.resourceDao().insertResources(listOf(entity))
+                }
+                isRepositoryActionLoading = false
+                Toast.makeText(localContext, "سند حقوقی محلی آپلود و به مخزن اضافه شد.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Rtl) {
+        FrostedGlassBackground {
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val isWideScreen = maxWidth > 850.dp
+
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // DESKTOP LEFT SIDEBAR (Renders on Widescreens)
+                    if (isWideScreen) {
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 12.dp),
-                            horizontalArrangement = Arrangement.End,
-                            verticalAlignment = Alignment.CenterVertically
+                                .width(260.dp)
+                                .fillMaxHeight()
+                                .background(surfaceColor)
+                                .border(1.dp, glassBorderColor)
+                                .padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.Start
                         ) {
-                            Text(
-                                text = "میز خدمت کاربران عادی",
-                                style = Typography.titleMedium,
-                                color = AccentGold,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(Icons.Default.Star, contentDescription = null, tint = AccentGold)
-                        }
-
-                        Divider(color = glassBorderColor, modifier = Modifier.padding(bottom = 8.dp))
-
-                        val sidebarTabs = listOf(
-                            Triple("dashboard", "صفحه نخست", Icons.Default.Home),
-                            Triple("cases", "لیست پرونده‌ها", Icons.Default.Menu),
-                            Triple("research", "جستجوی مراجع قانونی", Icons.Default.Search),
-                            Triple("timeline", "مراحل رسیدگی", Icons.Default.Build),
-                            Triple("notifications", "صندوق پیام‌ها", Icons.Default.Notifications),
-                            Triple("profile", "پروفایل کاربری", Icons.Default.Person),
-                            Triple("settings", "تنظیمات برنامه", Icons.Default.Settings)
-                        )
-
-                        sidebarTabs.forEach { (tabId, label, icon) ->
-                            val isSelected = activeTab == tabId
+                            // Header Title
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(if (isSelected) primaryColor.copy(alpha = 0.15f) else Color.Transparent)
-                                    .clickable { activeTab = tabId }
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                horizontalArrangement = Arrangement.End,
+                                    .padding(vertical = 12.dp),
+                                horizontalArrangement = Arrangement.Start,
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
+                                Icon(Icons.Default.Star, contentDescription = null, tint = AccentGold)
+                                Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = label,
-                                    style = Typography.bodyMedium,
-                                    color = if (isSelected) primaryColor else onBgColor,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                )
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = null,
-                                    tint = if (isSelected) primaryColor else onSurfaceColor,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.weight(1f))
-
-                        // Custom FAB inside desktop sidebar
-                        Button(
-                            onClick = onNavigateToWizard,
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("دادخواست جدید", style = Typography.bodyMedium, color = Color.Black, fontWeight = FontWeight.Bold)
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black)
-                        }
-                    }
-                }
-
-                // MAIN CONTENT SECTION
-                Scaffold(
-                    modifier = Modifier.weight(1f),
-                    containerColor = Color.Transparent,
-                    topBar = {
-                        CenterAlignedTopAppBar(
-                            title = {
-                                Text(
-                                    text = "میز هوشمند دادرس ملی",
-                                    style = Typography.titleLarge,
+                                    text = "میز خدمت هوشمند دادرس",
+                                    style = Typography.titleMedium,
                                     color = AccentGold,
                                     fontWeight = FontWeight.Bold
                                 )
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = { authViewModel.logout() }) {
-                                    Icon(Icons.Default.Close, contentDescription = "logout", tint = SoftCrimson)
-                                }
-                            },
-                            actions = {
-                                Box(
+                            }
+
+                            Divider(color = glassBorderColor, modifier = Modifier.padding(bottom = 8.dp))
+
+                            // Sidebar Navigation Tabs
+                            val sidebarTabs = listOf(
+                                Triple("dashboard", "داشبورد اصلی", Icons.Default.Home),
+                                Triple("repository", "مخزن دانش حقوقی", Icons.Default.Book),
+                                Triple("analysis", "تحلیل خودکار اسناد", Icons.Default.Upload),
+                                Triple("transcribe", "پیاده‌سازی و رونویسی صوتی", Icons.Default.Mic),
+                                Triple("cases", "پیشینه و کارتابل لوایح", Icons.Default.FolderOpen),
+                                Triple("settings", "تنظیمات سیستمی", Icons.Default.Settings)
+                            )
+
+                            sidebarTabs.forEach { (tabId, label, icon) ->
+                                val isSelected = activeTab == tabId
+                                Row(
                                     modifier = Modifier
-                                        .padding(end = 12.dp)
-                                        .background(surfaceColor, CircleShape)
-                                        .border(1.dp, glassBorderColor, CircleShape)
-                                        .padding(horizontal = 12.dp, vertical = 6.dp)
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(12.dp))
+                                        .background(if (isSelected) primaryColor.copy(alpha = 0.15f) else Color.Transparent)
+                                        .clickable { activeTab = tabId }
+                                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                                    horizontalArrangement = Arrangement.Start,
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = null,
+                                        tint = if (isSelected) primaryColor else onSurfaceColor,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(12.dp))
                                     Text(
-                                        text = session?.username ?: "کاربر عادی",
-                                        style = Typography.labelMedium,
+                                        text = label,
+                                        style = Typography.bodyMedium,
+                                        color = if (isSelected) primaryColor else onBgColor,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.weight(1f))
+
+                            // Compact Wizard Trigger
+                            Button(
+                                onClick = onNavigateToWizard,
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.Black)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("تنظیم لایحه رسمی جدید", style = Typography.bodyMedium, color = Color.Black, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+
+                    // MAIN SCREEN WRAPPER
+                    Scaffold(
+                        modifier = Modifier.weight(1f),
+                        containerColor = Color.Transparent,
+                        topBar = {
+                            CenterAlignedTopAppBar(
+                                title = {
+                                    Text(
+                                        text = "پایانه دادگستری هوشمند دادرس",
+                                        style = Typography.titleLarge,
                                         color = AccentGold,
                                         fontWeight = FontWeight.Bold
                                     )
-                                }
-                            },
-                            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
-                        )
-                    },
-                    bottomBar = {
-                        if (!isWideScreen) {
-                            NavigationBar(
-                                containerColor = Color(0xD9050B18),
-                                tonalElevation = 0.dp
-                            ) {
-                                NavigationBarItem(
-                                    selected = activeTab == "profile",
-                                    onClick = { activeTab = "profile" },
-                                    icon = { Icon(Icons.Default.Person, contentDescription = null) },
-                                    label = { Text("پروفایل", style = Typography.labelSmall) },
-                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
-                                )
-                                NavigationBarItem(
-                                    selected = activeTab == "research",
-                                    onClick = { activeTab = "research" },
-                                    icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                                    label = { Text("تحقیق RAG", style = Typography.labelSmall) },
-                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
-                                )
-                                NavigationBarItem(
-                                    selected = activeTab == "cases",
-                                    onClick = { activeTab = "cases" },
-                                    icon = { Icon(Icons.Default.Menu, contentDescription = null) },
-                                    label = { Text("کارتابل", style = Typography.labelSmall) },
-                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
-                                )
-                                NavigationBarItem(
-                                    selected = activeTab == "dashboard",
-                                    onClick = { activeTab = "dashboard" },
-                                    icon = { Icon(Icons.Default.Home, contentDescription = null) },
-                                    label = { Text("داشبورد", style = Typography.labelSmall) },
-                                    colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
-                                )
-                            }
-                        }
-                    },
-                    floatingActionButton = {},
-                    floatingActionButtonPosition = FabPosition.Center
-                ) { innerPadding ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(innerPadding)
-                    ) {
-                        when (activeTab) {
-                            "dashboard" -> {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    Text(
-                                        text = "شاخص عملکرد و آمار مستندات پرونده",
-                                        style = Typography.headlineMedium,
-                                        color = onBgColor,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Right,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    if (!isWideScreen) {
-                                        CollapsibleNewRequestTab(
-                                            isDark = isDark,
-                                            surfaceColor = surfaceColor,
-                                            glassBorderColor = glassBorderColor,
-                                            onBgColor = onBgColor,
-                                            onSurfaceColor = onSurfaceColor,
-                                            onNavigateToWizard = onNavigateToWizard
+                                },
+                                navigationIcon = {
+                                    IconButton(
+                                        onClick = { authViewModel.logout() },
+                                        modifier = Modifier.testTag("logout_button")
+                                    ) {
+                                        Icon(Icons.Default.Close, contentDescription = "logout", tint = SoftCrimson)
+                                    }
+                                },
+                                actions = {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.padding(end = 12.dp)
+                                    ) {
+                                        Text(
+                                            text = session?.username ?: "کاربر عادی",
+                                            style = Typography.labelMedium,
+                                            color = AccentGold,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier
+                                                .background(surfaceColor, CircleShape)
+                                                .border(1.dp, glassBorderColor, CircleShape)
+                                                .padding(horizontal = 12.dp, vertical = 6.dp)
                                         )
                                     }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                    ) {
-                                        Card(
-                                            modifier = Modifier.weight(1f).glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.08f)),
-                                            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                                        ) {
-                                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Icon(Icons.Default.Menu, contentDescription = null, tint = primaryColor, modifier = Modifier.size(28.dp))
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                Text(cases.size.toString(), style = Typography.displayMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                                Text("پرونده ثبتی", style = Typography.labelMedium, color = onSurfaceColor)
-                                            }
-                                        }
-
-                                        Card(
-                                            modifier = Modifier.weight(1f).glassy3D(cornerRadius = 16.dp, glowColor = AccentGold.copy(alpha = 0.08f)),
-                                            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                                        ) {
-                                            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                                Icon(Icons.Default.Star, contentDescription = null, tint = AccentGold, modifier = Modifier.size(28.dp))
-                                                Spacer(modifier = Modifier.height(8.dp))
-                                                Text("%۹۴", style = Typography.displayMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                                Text("ضریب اطمینان RAG", style = Typography.labelMedium, color = onSurfaceColor)
-                                            }
-                                        }
-                                    }
-
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth().glassy3D(cornerRadius = 16.dp, glowColor = AccentGold.copy(alpha = 0.08f)),
-                                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                                    ) {
-                                        Column(
-                                            modifier = Modifier.padding(16.dp),
-                                            horizontalAlignment = Alignment.End,
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                        ) {
-                                            Text("راهنمای سامانه دادرس هوشمند", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
-                                            Divider(color = glassBorderColor)
-                                            Text(
-                                                text = "این پلتفرم برای کمک به کاربران عادی و تنظیم دادخواست‌های منطبق بر موازین قضایی جمهوری اسلامی ایران به وسیله هوش مصنوعی طراحی شده است. از میان‌برهای زیر استفاده کنید غوطه ور در جلوه شیشه‌ای Liquid Glass.",
-                                                style = Typography.bodyMedium,
-                                                color = onSurfaceColor,
-                                                textAlign = TextAlign.Right
-                                            )
-                                            Spacer(modifier = Modifier.height(4.dp))
-                                            Button(
-                                                onClick = onNavigateToLibrary,
-                                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                                                modifier = Modifier.align(Alignment.Start)
+                                },
+                                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
+                            )
+                        },
+                        bottomBar = {
+                            if (!isWideScreen) {
+                                NavigationBar(
+                                    containerColor = Color(0xD9050B18),
+                                    tonalElevation = 0.dp,
+                                    modifier = Modifier.height(72.dp)
+                                ) {
+                                    NavigationBarItem(
+                                        selected = activeTab == "dashboard",
+                                        onClick = { activeTab = "dashboard" },
+                                        icon = { Icon(Icons.Default.Home, contentDescription = null) },
+                                        label = { Text("پیشخوان", style = Typography.labelSmall) },
+                                        colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
+                                    )
+                                    NavigationBarItem(
+                                        selected = activeTab == "transcribe",
+                                        onClick = { activeTab = "transcribe" },
+                                        icon = { Icon(Icons.Default.Mic, contentDescription = null) },
+                                        label = { Text("رونویسی صوتی", style = Typography.labelSmall) },
+                                        colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
+                                    )
+                                    
+                                    // Highlighted Central Navigation FAB for Document Analysis
+                                    NavigationBarItem(
+                                        selected = activeTab == "analysis",
+                                        onClick = { activeTab = "analysis" },
+                                        icon = { 
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(44.dp)
+                                                    .background(
+                                                        brush = Brush.radialGradient(
+                                                            colors = listOf(AccentGold, AccentGold.copy(alpha = 0.6f))
+                                                        ),
+                                                        shape = CircleShape
+                                                    )
+                                                    .border(1.5.dp, Color.White, CircleShape),
+                                                contentAlignment = Alignment.Center
                                             ) {
-                                                Text("ورود به کتابخانه قوانین ملی", color = Color.White)
+                                                Icon(Icons.Default.CloudUpload, contentDescription = null, tint = Color.Black, modifier = Modifier.size(24.dp))
+                                            }
+                                        },
+                                        label = { Text("تحلیل اسناد", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = AccentGold) },
+                                        colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = Color.Transparent, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
+                                    )
+
+                                    NavigationBarItem(
+                                        selected = activeTab == "cases",
+                                        onClick = { activeTab = "cases" },
+                                        icon = { Icon(Icons.Default.FolderOpen, contentDescription = null) },
+                                        label = { Text("کارتابل", style = Typography.labelSmall) },
+                                        colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
+                                    )
+                                    NavigationBarItem(
+                                        selected = activeTab == "settings",
+                                        onClick = { activeTab = "settings" },
+                                        icon = { Icon(Icons.Default.Settings, contentDescription = null) },
+                                        label = { Text("تنظیمات", style = Typography.labelSmall) },
+                                        colors = NavigationBarItemDefaults.colors(selectedIconColor = AccentGold, selectedTextColor = AccentGold, indicatorColor = SlateNavyMedium, unselectedIconColor = onSurfaceColor, unselectedTextColor = onSurfaceColor)
+                                    )
+                                }
+                            }
+                        }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            when (activeTab) {
+                                // ====================================
+                                //   1. TAB: HOME DASHBOARD
+                                // ====================================
+                                "dashboard" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp)
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "گزارش کلی عملکرد و مستندات سیستمی",
+                                            style = Typography.headlineMedium,
+                                            color = onBgColor,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        if (!isWideScreen) {
+                                            CollapsibleNewRequestTab(
+                                                isDark = isDark,
+                                                surfaceColor = surfaceColor,
+                                                glassBorderColor = glassBorderColor,
+                                                onBgColor = onBgColor,
+                                                onSurfaceColor = onSurfaceColor,
+                                                onNavigateToWizard = onNavigateToWizard
+                                            )
+                                        }
+
+                                        // Stats Cards Grid
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                        ) {
+                                            Card(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.08f)),
+                                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                                            ) {
+                                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Icon(Icons.Default.Menu, contentDescription = null, tint = primaryColor, modifier = Modifier.size(28.dp))
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(cases.size.toString(), style = Typography.displayMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                    Text("کل اسناد و لوایح پرونده", style = Typography.labelMedium, color = onSurfaceColor)
+                                                }
+                                            }
+
+                                            Card(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .glassy3D(cornerRadius = 16.dp, glowColor = AccentGold.copy(alpha = 0.08f)),
+                                                colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                                            ) {
+                                                Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                                    Icon(Icons.Default.Book, contentDescription = null, tint = AccentGold, modifier = Modifier.size(28.dp))
+                                                    Spacer(modifier = Modifier.height(8.dp))
+                                                    Text(legalResources.size.toString(), style = Typography.displayMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                    Text("مفاد قوانین فقهی مخزن", style = Typography.labelMedium, color = onSurfaceColor)
+                                                }
+                                            }
+                                        }
+
+                                        // Important Announcements
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .glassy3D(cornerRadius = 16.dp, glowColor = AccentGold.copy(alpha = 0.04f)),
+                                            colors = CardDefaults.cardColors(containerColor = Color.Transparent)
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(Icons.Default.Notifications, contentDescription = null, tint = AccentGold)
+                                                    Text("اطلاعیه‌های مراجع دادرسی و دادگاه‌ها", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                }
+                                                Divider(color = glassBorderColor)
+                                                if (notifications.isEmpty()) {
+                                                    Text("صندوق اطلاعیه‌های شما در حال حاضر خالی است.", style = Typography.bodyMedium, color = onSurfaceColor, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+                                                } else {
+                                                    notifications.forEachIndexed { index, notif ->
+                                                        Row(
+                                                            modifier = Modifier
+                                                                .fillMaxWidth()
+                                                                .background(surfaceColor, RoundedCornerShape(8.dp))
+                                                                .padding(12.dp),
+                                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            IconButton(onClick = { citizenViewModel.dismissNotification(index) }) {
+                                                                Icon(Icons.Default.Check, contentDescription = "خوانده شد", tint = Color.Green)
+                                                            }
+                                                            Column(horizontalAlignment = Alignment.End, modifier = Modifier.weight(1f)) {
+                                                                Text(text = notif, style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Quick Launch Card
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.06f)),
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.6f))
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp), horizontalAlignment = Alignment.Start) {
+                                                Text("دستیار خودکار نگارش حقوقی دادرس", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                                Text("آیا قصد طرح شکایت یا تهیه لایحه دفاعیه دارید؟ دادرس با فرآیند ۳ گامه‌ای هوشمند تمام خودکار، دادخواست نهایی منطبق بر منابع فقهی را برای شما صادر می‌کند.", style = Typography.bodyMedium, color = onSurfaceColor)
+                                                Button(
+                                                    onClick = onNavigateToWizard,
+                                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                                    shape = RoundedCornerShape(8.dp),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text("ورود به دستیار هوشمند لایحه", color = Color.Black, fontWeight = FontWeight.Bold)
+                                                    Spacer(modifier = Modifier.width(8.dp))
+                                                    Icon(Icons.Default.ArrowForward, contentDescription = null, tint = Color.Black)
+                                                }
                                             }
                                         }
                                     }
+                                }
 
-                                    // Quick Shortcuts
-                                    Text("بخش‌های دسترسی سریع", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                        listOf(
-                                            Pair("شروع به تولید مستقیم شکواییه قضایی", "new_wizard"),
-                                            Pair("بررسی قوانین مالیات و حقوق تجارت", "library"),
-                                            Pair("تاریخچه دادرسی و تقویم پرونده", "timeline")
-                                        ).forEach { (label, act) ->
+                                // ====================================
+                                //   2. TAB: LEGAL KNOWLEDGE REPOSITORY
+                                // ====================================
+                                "repository" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "مخزن جامع قوانین و فتاوای فقهی",
+                                            style = Typography.headlineMedium,
+                                            color = onBgColor,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Button(
+                                                onClick = { showAddManualResourceDialog = true },
+                                                colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Icon(Icons.Default.Add, contentDescription = null, tint = Color.White)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("افزودن ماده حقوقی دستی", color = Color.White, fontWeight = FontWeight.Bold)
+                                            }
+
+                                            Button(
+                                                onClick = { repositoryFilePicker.launch("*/*") },
+                                                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                                shape = RoundedCornerShape(10.dp)
+                                            ) {
+                                                Icon(Icons.Default.UploadFile, contentDescription = null, tint = Color.Black)
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                                Text("آپلود کتاب قانون (PDF/DOCX/TXT)", color = Color.Black, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+
+                                        // Export Aggregated Dataset Card
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.5f))
+                                        ) {
                                             Row(
                                                 modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .glassy3D(cornerRadius = 12.dp, glowColor = primaryColor.copy(alpha = 0.04f))
-                                                    .clickable {
-                                                        if (act == "new_wizard") onNavigateToWizard()
-                                                        else if (act == "library") onNavigateToLibrary()
-                                                        else activeTab = "timeline"
-                                                    }
-                                                    .padding(16.dp),
+                                                    .padding(12.dp)
+                                                    .fillMaxWidth(),
                                                 horizontalArrangement = Arrangement.SpaceBetween,
                                                 verticalAlignment = Alignment.CenterVertically
                                             ) {
-                                                Icon(Icons.Default.ArrowBack, contentDescription = null, tint = primaryColor)
-                                                Text(label, style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.SemiBold)
+                                                Button(
+                                                    onClick = {
+                                                        if (legalResources.isEmpty()) {
+                                                            Toast.makeText(localContext, "هیچ منبعی در پایگاه داده وجود ندارد.", Toast.LENGTH_SHORT).show()
+                                                        } else {
+                                                            val aggregated = StringBuilder()
+                                                            aggregated.append("=== پایگاه یکپارچه کلان‌داده فقهی دادرس ===\n")
+                                                            aggregated.append("شامل کل قوانین محلی معتبر و فتاوا استخراج شده\n\n")
+                                                            legalResources.forEachIndexed { i, res ->
+                                                                aggregated.append("بند ${i+1}: ${res.title}\n")
+                                                                aggregated.append("دسته بندی: ${res.category}\n")
+                                                                aggregated.append("ماده قانونی پیوست: ${res.articleNo}\n")
+                                                                aggregated.append("محتوای اصلی:\n${res.content}\n")
+                                                                aggregated.append("-------------------------------------------\n")
+                                                            }
+                                                            copyToClipboard(localContext, "Aggregated Dataset", aggregated.toString())
+                                                            Toast.makeText(localContext, "کلان‌داده یکپارچه کپی شد و آماده استفاده حقوقی است.", Toast.LENGTH_LONG).show()
+                                                        }
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
+                                                ) {
+                                                    Icon(Icons.Default.Share, contentDescription = null, tint = Color.Black)
+                                                    Spacer(modifier = Modifier.width(6.dp))
+                                                    Text("صادرات کلان‌داده یکپارچه مخزن", color = Color.Black)
+                                                }
+                                                Column(horizontalAlignment = Alignment.End) {
+                                                    Text("تولید کیت آموزشی مخزن قوانین", style = Typography.titleSmall, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                    Text("ادغام، حذف تکرارها و دانلود یکپارچه کلیه قوانین", style = Typography.bodySmall, color = onSurfaceColor)
+                                                }
+                                            }
+                                        }
+
+                                        OutlinedTextField(
+                                            value = repositorySearchQuery,
+                                            onValueChange = { repositorySearchQuery = it },
+                                            placeholder = { Text("جستجو در بین قوانین، مقررات و دکترین محلی...", color = onSurfaceColor) },
+                                            singleLine = true,
+                                            trailingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = AccentGold) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = onBgColor,
+                                                unfocusedTextColor = onBgColor,
+                                                focusedBorderColor = AccentGold,
+                                                unfocusedBorderColor = glassBorderColor
+                                            )
+                                        )
+
+                                        // Category filters
+                                        val categories = listOf("همه", "قانون مدنی", "قانون مجازات", "حقوق خانواده", "قوانین تجاری")
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .horizontalScroll(rememberScrollState()),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            categories.forEach { cat ->
+                                                val isSelected = repositorySelectedCategory == cat
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(if (isSelected) AccentGold else surfaceColor, RoundedCornerShape(20.dp))
+                                                        .border(1.dp, if (isSelected) AccentGold else glassBorderColor, RoundedCornerShape(20.dp))
+                                                        .clickable { repositorySelectedCategory = cat }
+                                                        .padding(horizontal = 14.dp, vertical = 8.dp)
+                                                ) {
+                                                    Text(text = cat, color = if (isSelected) Color.Black else onBgColor, fontWeight = FontWeight.SemiBold, style = Typography.labelMedium)
+                                                }
+                                            }
+                                        }
+
+                                        // Resources List
+                                        val filteredResources = legalResources.filter { res ->
+                                            (repositorySelectedCategory == "همه" || res.category == repositorySelectedCategory) &&
+                                            (res.title.contains(repositorySearchQuery) || res.content.contains(repositorySearchQuery) || res.description.contains(repositorySearchQuery))
+                                        }
+
+                                        if (filteredResources.isEmpty()) {
+                                            Column(
+                                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Default.Info, contentDescription = null, tint = onSurfaceColor, modifier = Modifier.size(56.dp))
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Text("هیچ منبع یا قاعده فقهی یافت نشد.", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                            }
+                                        } else {
+                                            LazyColumn(
+                                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                                                modifier = Modifier.weight(1f).fillMaxWidth()
+                                            ) {
+                                                items(filteredResources) { res ->
+                                                    Card(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .background(primaryColor.copy(alpha = 0.15f), RoundedCornerShape(6.dp))
+                                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                                ) {
+                                                                    Text(text = res.category, style = Typography.labelSmall, color = primaryColor)
+                                                                }
+                                                                Text(text = "${res.title} (ماده ${res.articleNo})", style = Typography.bodyLarge, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                            }
+                                                            Text(text = res.description, style = Typography.bodySmall, color = onSurfaceColor)
+                                                            Divider(color = glassBorderColor.copy(alpha = 0.4f))
+                                                            Text(text = res.content, style = Typography.bodyMedium, color = onBgColor, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth())
+                                                        }
+                                                    }
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            "cases" -> {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                ) {
-                                    Text(
-                                        text = "کارتابل پرونده‌های کاربر عادی",
-                                        style = Typography.headlineMedium,
-                                        color = onBgColor,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
-                                        textAlign = TextAlign.Right
-                                    )
-
-                                    if (!isWideScreen) {
-                                        CollapsibleNewRequestTab(
-                                            isDark = isDark,
-                                            surfaceColor = surfaceColor,
-                                            glassBorderColor = glassBorderColor,
-                                            onBgColor = onBgColor,
-                                            onSurfaceColor = onSurfaceColor,
-                                            onNavigateToWizard = onNavigateToWizard
-                                        )
-                                        Spacer(modifier = Modifier.height(12.dp))
-                                    }
-
-                                    OutlinedTextField(
-                                        value = searchQuery,
-                                        onValueChange = { searchQuery = it },
-                                        placeholder = { Text("جستجو در بین پرونده‌ها...", color = onSurfaceColor) },
-                                        singleLine = true,
-                                        trailingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = AccentGold) },
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedTextColor = onBgColor,
-                                            unfocusedTextColor = onBgColor,
-                                            focusedBorderColor = AccentGold,
-                                            unfocusedBorderColor = glassBorderColor,
-                                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                                        )
-                                    )
-
-                                    if (filteredCases.isEmpty()) {
-                                        Column(
-                                            modifier = Modifier.fillMaxSize(),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.Center
-                                        ) {
-                                            Icon(Icons.Default.Info, contentDescription = null, tint = onSurfaceColor, modifier = Modifier.size(56.dp))
-                                            Spacer(modifier = Modifier.height(12.dp))
-                                            Text("پرونده‌ای یافت نشد.", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                        }
-                                    } else {
-                                        LazyColumn(
-                                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                                            modifier = Modifier.fillMaxSize()
-                                        ) {
-                                            items(filteredCases) { case ->
-                                                CaseCardItem(
-                                                    case = case,
-                                                    onClick = { onNavigateToCase(case.id) },
-                                                    onDelete = { citizenViewModel.deleteCase(case.id, session?.username ?: "کاربر عادی") }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            "research" -> {
-                                var researchQuery by remember { mutableStateOf("") }
-                                var isSearchingRAG by remember { mutableStateOf(false) }
-                                var searchResults by remember { mutableStateOf<List<String>>(emptyList()) }
-
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    Text(
-                                        text = "بخش جستجو و تحقیق قوانین ملی",
-                                        style = Typography.headlineMedium,
-                                        color = onBgColor,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Right
-                                    )
-
-                                    if (!isWideScreen) {
-                                        CollapsibleNewRequestTab(
-                                            isDark = isDark,
-                                            surfaceColor = surfaceColor,
-                                            glassBorderColor = glassBorderColor,
-                                            onBgColor = onBgColor,
-                                            onSurfaceColor = onSurfaceColor,
-                                            onNavigateToWizard = onNavigateToWizard
-                                        )
-                                    }
-                                    Text(
-                                        text = "جستجوی واژه‌محور و برداری (Hybrid Search) در آرشیو آرای وحدت رویه و قوانین ملی:",
-                                        style = Typography.bodyMedium,
-                                        color = onSurfaceColor,
-                                        textAlign = TextAlign.Right
-                                    )
-
-                                    OutlinedTextField(
-                                        value = researchQuery,
-                                        onValueChange = { researchQuery = it },
-                                        placeholder = { Text("مثال: ماده ۱۹۰ قانون مدنی تعهدات قراردادها", color = onSurfaceColor) },
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = OutlinedTextFieldDefaults.colors(
-                                            focusedTextColor = onBgColor,
-                                            unfocusedTextColor = onBgColor,
-                                            focusedBorderColor = primaryColor,
-                                            unfocusedBorderColor = glassBorderColor,
-                                            focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                            unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                                        )
-                                    )
-
-                                    Button(
-                                        onClick = {
-                                            if (researchQuery.isNotBlank()) {
-                                                isSearchingRAG = true
-                                                searchResults = emptyList()
-                                                // شبیه‌سازی فنی برگرداندن پاسخ RAG
-                                                searchResults = listOf(
-                                                    "قانون مدنی ماده ۱۹۰: برای صحت هر معامله شرایط ذیل اساسی است: ۱) قصد طرفین و رضای آن‌ها ۲) اهلیت طرفین ۳) موضوع معین که مورد معامله باشد ۴) مشروعیت جهت معامله. (تطابق برداری: %۹۸)",
-                                                    "رای وحدت رویه شماره ۷۹۰ دیوان عالی کشور: در خصوص عدم نفوذ عقود عاری از اهلیت متعاقدین و نحوه مطالبه خسارات مادی و معنوی در محاکم عمومی حقوقی. (تطابق برداری: %۹۱)",
-                                                    "نظریه مشورتی قوه قضاییه ۱۲۳۴/۷: چنانچه جهت معامله تصریح نشده باشد، اصل بر صحت است مگر شواهد قطعی بر خلاف مشروعیت جهت وجود داشته باشد. (تطابق برداری: %۸۵)"
-                                                )
-                                                isSearchingRAG = false
-                                            }
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
-                                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                                // ====================================
+                                //   3. TAB: UNIVERSAL AI PROCESSOR (Analysis)
+                                // ====================================
+                                "analysis" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp)
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
                                     ) {
-                                        Text("جستجوی هیبریدی دانش برداری RAG", color = Color.White)
-                                    }
+                                        Text(
+                                            text = "کیت هوشمند دادرسی و تحلیل خودکار اسناد",
+                                            style = Typography.headlineMedium,
+                                            color = onBgColor,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
 
-                                    if (searchResults.isNotEmpty()) {
-                                        Text("پایگاه مراجع منطبق (بر اساس رتبه برداری):", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
-                                        searchResults.forEach { res ->
+                                        // Drag & Drop / Selection UI
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .border(2.dp, Brush.linearGradient(listOf(AccentGold, primaryColor)), RoundedCornerShape(16.dp))
+                                                .clickable { analysisFilePicker.launch("*/*") },
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.4f))
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(24.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                            ) {
+                                                Icon(Icons.Default.CloudUpload, contentDescription = null, tint = AccentGold, modifier = Modifier.size(56.dp))
+                                                Text("بارگذاری اسناد شواهد و مدارک پرونده", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                Text("فرمت‌های مجاز: PDF, DOCX, TXT, HTML, JSON, CSV, XML", style = Typography.bodySmall, color = onSurfaceColor)
+                                                Text("سیستم به صورت پویا ساختار، نوع زبان و قواعد متنی را به صورت محلی استخراج خواهد کرد.", style = Typography.labelSmall, color = AccentGold, textAlign = TextAlign.Center)
+                                            }
+                                        }
+
+                                        // RAG toggle & Model Selectors
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                        ) {
+                                            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Switch(checked = enableRagGrounding, onCheckedChange = { enableRagGrounding = it })
+                                                    Column(horizontalAlignment = Alignment.End) {
+                                                        Text("هوش دانش‌بنیان (همراه با RAG قوانین)", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                        Text("استنباط بر پایه‌ فتاوا و قواعد موجود در مخزن محلی", style = Typography.labelSmall, color = onSurfaceColor)
+                                                    }
+                                                }
+
+                                                Divider(color = glassBorderColor.copy(alpha = 0.5f))
+
+                                                Text("انتخاب مدل‌ برتر دادرسی سیستم:", style = Typography.titleSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                                                val engines = listOf("Gemini 1.5 Pro", "Claude 3.5 Sonnet", "GPT-4o Enterprise", "DeepSeek Llama-3")
+                                                Row(
+                                                    modifier = Modifier
+                                                        .fillMaxWidth()
+                                                        .horizontalScroll(rememberScrollState()),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                                ) {
+                                                    engines.forEach { model ->
+                                                        val isSelected = selectedAnalysisProvider == model
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .background(if (isSelected) primaryColor else surfaceColor, RoundedCornerShape(12.dp))
+                                                                .border(1.dp, if (isSelected) primaryColor else glassBorderColor, RoundedCornerShape(12.dp))
+                                                                .clickable { selectedAnalysisProvider = model }
+                                                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                                        ) {
+                                                            Text(text = model, color = Color.White, style = Typography.labelMedium)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // List of Imported Files
+                                        if (selectedAnalysisDocs.isNotEmpty()) {
+                                            Text("اسناد بارگذاری شده جاری جهت پردازش:", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                            selectedAnalysisDocs.forEachIndexed { index, doc ->
+                                                Card(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    colors = CardDefaults.cardColors(containerColor = Color(0x330B1220))
+                                                ) {
+                                                    Row(
+                                                        modifier = Modifier
+                                                            .padding(12.dp)
+                                                            .fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        IconButton(onClick = {
+                                                            val updated = selectedAnalysisDocs.toMutableList()
+                                                            updated.removeAt(index)
+                                                            selectedAnalysisDocs = updated
+                                                        }) {
+                                                            Icon(Icons.Default.Delete, contentDescription = "حذف مورد", tint = SoftCrimson)
+                                                        }
+
+                                                        Column(horizontalAlignment = Alignment.End) {
+                                                            Text(text = doc.first, style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                                Box(modifier = Modifier.background(Color.DarkGray, RoundedCornerShape(4.dp)).padding(horizontal = 6.dp, vertical = 2.dp)) {
+                                                                    Text(DocumentProcessor.detectLanguage(doc.second), style = Typography.labelSmall, color = Color.LightGray)
+                                                                }
+                                                                Text("طول متن: ${doc.second.length} کاراکتر", style = Typography.labelSmall, color = onSurfaceColor)
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // Synthesis trigger
+                                            Button(
+                                                onClick = {
+                                                    scope.launch {
+                                                        isAnalysisWorking = true
+                                                        analysisProgressText = "در حال ایجاد یکپارچگی قضایی با مدل $selectedAnalysisProvider..."
+                                                        
+                                                        // Grounding logic
+                                                        val groundingContext = StringBuilder()
+                                                        if (enableRagGrounding && legalResources.isNotEmpty()) {
+                                                            groundingContext.append("\n\nپایگاه دانش حقوقی به عنوان منابع استنادی دادرسی:\n")
+                                                            legalResources.take(5).forEach { res ->
+                                                                groundingContext.append("- ${res.title} (${res.category}): ${res.content}\n")
+                                                            }
+                                                        }
+
+                                                        val completeParsedContent = selectedAnalysisDocs.joinToString("\n\n") { "اسم فایل: ${it.first}\nمحتوای متنی اسنادی:\n${it.second}" }
+                                                        val builtPrompt = """
+                                                            نقش: شما وکیل ارشد حقوقی تراز اول و تحلیل‌گر دادرسی سامانه مستقل دادرس هستید.
+                                                            با بررسی همه‌جانبه‌ی متون اسنادی زیر و اعمال قواعد قانونی فقهی نسبت به آن‌ها، یک گزارش استنتاجی یکپارچه، بدون نقص و عاری از توهم به زبان فارسی برای کاربر تدوین کنید.
+                                                            
+                                                            اسناد جهت تفحص:
+                                                            $completeParsedContent
+                                                            $groundingContext
+                                                            
+                                                            خواسته: گزارش تحلیل و صحت‌سنجی فتاوا را دقیقاً ذیل بخش‌های شماره‌گذاری شده بنویسید:
+                                                            بخش ۱: خلاصه‌سازی کلیدی و تشریح موضوع
+                                                            بخش ۲: تطبیق حقوقی و مستندات قانونی و قواعد فقهی
+                                                            بخش ۳: اصحاب دعوی، اشخاص ثالث، مراجع و ارگان‌های ذیمدخل
+                                                            بخش ۴: اقدامات حمایتی، توصیه‌های راهبردی و مسیر دادرسی کاربر
+                                                        """.trimIndent()
+
+                                                        try {
+                                                            val response = AiOrchestrator.executeWithFailover(selectedAnalysisProvider, builtPrompt, "شما دستیار تحلیل هوشمند متنی دادگاه هستید.")
+                                                            generatedReportText = response
+                                                            generatedReportTitle = if (selectedAnalysisDocs.size == 1) "تحلیل منفرد - ${selectedAnalysisDocs.first().first}" else "تحلیل یکپارچه چندسندی (${selectedAnalysisDocs.size} سند)"
+                                                            
+                                                            // Save directly to Case SQLite Room History Database!
+                                                            val savedCase = CaseEntity(
+                                                                type = "تحلیل سند هوشمند",
+                                                                title = generatedReportTitle,
+                                                                description = completeParsedContent.take(150),
+                                                                plaintiff = "کاربر دوسیه",
+                                                                defendant = "پیوست پرونده",
+                                                                beneficiary = "متقاضی محلی",
+                                                                legalPosition = generatedReportTitle,
+                                                                suggestedEvidence = selectedAnalysisDocs.map { it.first }.joinToString("، "),
+                                                                relief = "صحت سنجی استناد شواهد",
+                                                                confidenceScore = 90,
+                                                                status = "نهایی‌شده",
+                                                                unifiedOutput = response,
+                                                                geminiOutput = response,
+                                                                gptOutput = response,
+                                                                date = "۱۶ خرداد ۱۴۰۵"
+                                                            )
+
+                                                            withContext(Dispatchers.IO) {
+                                                                db.caseDao().insertCase(savedCase)
+                                                            }
+
+                                                            Toast.makeText(localContext, "تحلیل تکمیل شد و در آرشیو تاریخچه ثبت گردید.", Toast.LENGTH_LONG).show()
+                                                        } catch (e: Exception) {
+                                                            Toast.makeText(localContext, "خطا در تماس با مدل: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                                                        } finally {
+                                                            isAnalysisWorking = false
+                                                        }
+                                                    }
+                                                },
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                                shape = RoundedCornerShape(12.dp)
+                                            ) {
+                                                Icon(Icons.Default.Bolt, contentDescription = null, tint = Color.Black)
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Text(
+                                                    text = if (selectedAnalysisDocs.size > 1) "اجرای تحلیل ترکیبی مجموع اسناد" else "اجرای تحلیل اختصاصی این سند",
+                                                    color = Color.Black,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                        }
+
+                                        // Analysis Output display
+                                        generatedReportText?.let { rep ->
+                                            Text("گزارش تحلیلی نهایی صادر شده:", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
                                             Card(
-                                                modifier = Modifier.fillMaxWidth().border(1.dp, glassBorderColor, RoundedCornerShape(12.dp)),
+                                                modifier = Modifier.fillMaxWidth(),
                                                 colors = CardDefaults.cardColors(containerColor = surfaceColor)
                                             ) {
-                                                Text(
-                                                    text = res,
-                                                    style = Typography.bodyMedium,
-                                                    color = onBgColor,
-                                                    modifier = Modifier.padding(12.dp),
-                                                    textAlign = TextAlign.Right
-                                                )
+                                                Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        IconButton(onClick = {
+                                                            copyToClipboard(localContext, "AI Analysis Report", rep)
+                                                            Toast.makeText(localContext, "گزارش در حافظه موقت کپی شد.", Toast.LENGTH_SHORT).show()
+                                                        }) {
+                                                            Icon(Icons.Default.ContentCopy, contentDescription = "کپی لایحه", tint = AccentGold)
+                                                        }
+                                                        Text(text = generatedReportTitle, style = Typography.bodyLarge, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                    }
+                                                    Divider(color = glassBorderColor.copy(alpha = 0.5f))
+                                                    Text(text = rep, style = Typography.bodyMedium, color = onBgColor, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth())
+                                                }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            "timeline" -> {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    Text(
-                                        text = "خط زمانی و مراحل دادرسی",
-                                        style = Typography.headlineMedium,
-                                        color = onBgColor,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Right
-                                    )
+                                "transcribe" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp)
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                                    ) {
+                                        Text(
+                                            text = "پیاده‌سازی و رونویسی از کلام دادرس",
+                                            style = Typography.headlineMedium,
+                                            color = onBgColor,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
 
-                                    Text(
-                                        "مراحل پیش‌بینی شده در فرآیند دادخواست قضایی شما:",
-                                        style = Typography.bodyMedium,
-                                        color = onSurfaceColor
-                                    )
+                                        Text(
+                                            text = "شما می‌توانید دفاعیات، اظهارات یا فرکانس‌های کلامی پرونده را از طریق میکروفون به زبان روان فارسی ضبط کنید. هوش مصنوعی مستقل دادرس (Gemini 3.5 Flash) صدا را رونویسی، ساختاردهی و تایید می‌کند.",
+                                            style = Typography.bodyMedium,
+                                            color = onSurfaceColor,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
 
-                                    val timelineEvents = listOf(
-                                        Triple("گام اول: تنظیم مدارک", "ثبت شرح واقعه و ارایه شواهد اولیه", "۱۶ خرداد ۱۴۰۵"),
-                                        Triple("گام دوم: تحلیل و امضای اسناد", "سنجش درصد موفقیت و تایید هوشمند لایحه", "۱۷ خرداد ۱۴۰۵"),
-                                        Triple("گام سوم: ابلاغیه الکترونیک", "ارسال خودکار دادخواست به سامانه رسمی ابلاغ", "۱۹ خرداد ۱۴۰۵"),
-                                        Triple("گام چهارم: شورای حل اختلاف", "تلاش برای صلح موضوع بر اساس کدهای تسبیب", "به زودی")
-                                    )
+                                        // Pulse Microphone Card
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.5f)),
+                                            shape = RoundedCornerShape(24.dp),
+                                            border = BorderStroke(2.dp, if (isRecording) AccentGold else glassBorderColor)
+                                        ) {
+                                            Column(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .padding(24.dp),
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                                            ) {
+                                                // Animated pulse micro icon
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(80.dp)
+                                                        .background(
+                                                            color = if (isRecording) SoftCrimson.copy(alpha = 0.2f) else primaryColor.copy(alpha = 0.1f),
+                                                            shape = CircleShape
+                                                        )
+                                                        .border(
+                                                            width = 2.dp,
+                                                            color = if (isRecording) SoftCrimson else AccentGold.copy(alpha = 0.3f),
+                                                            shape = CircleShape
+                                                        ),
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                                        contentDescription = null,
+                                                        tint = if (isRecording) SoftCrimson else AccentGold,
+                                                        modifier = Modifier.size(36.dp)
+                                                    )
+                                                }
 
-                                    timelineEvents.forEachIndexed { index, ev ->
+                                                Text(
+                                                    text = when {
+                                                        isRecording -> "در حال ضبط شواهد کلامی شما..."
+                                                        isTranscribingWorking -> "در حال رونویسی صوتی با مدل Gemini 3.5..."
+                                                        else -> "آماده برای آغاز ضبط گفتار حقوقی"
+                                                    },
+                                                    style = Typography.bodyLarge,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = if (isRecording) SoftCrimson else onBgColor
+                                                )
+
+                                                if (isRecording) {
+                                                    Text(
+                                                        text = "سیستم در حال نمونه‌برداری صوتی با وضوح بالا می‌باشد...",
+                                                        style = Typography.labelSmall,
+                                                        color = onSurfaceColor
+                                                    )
+                                                }
+
+                                                Row(
+                                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                                ) {
+                                                    if (!isRecording) {
+                                                        Button(
+                                                            onClick = {
+                                                                if (!hasMicPermission) {
+                                                                    micPermissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                                                                } else {
+                                                                    recordingFile = recorderHelper.startRecording()
+                                                                    if (recordingFile != null) {
+                                                                        isRecording = true
+                                                                        Toast.makeText(context, "ضبط صدا آغاز شد. صحبت کنید...", Toast.LENGTH_SHORT).show()
+                                                                    } else {
+                                                                        Toast.makeText(context, "خطا در آغاز ضبط صدا.", Toast.LENGTH_SHORT).show()
+                                                                    }
+                                                                }
+                                                            },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                                            shape = RoundedCornerShape(12.dp)
+                                                        ) {
+                                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.Black)
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text("شروع ضبط صدا", color = Color.Black, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    } else {
+                                                        Button(
+                                                            onClick = {
+                                                                recorderHelper.stopRecording()
+                                                                isRecording = false
+                                                                val file = recordingFile
+                                                                if (file != null && file.exists()) {
+                                                                    scope.launch {
+                                                                        isTranscribingWorking = true
+                                                                        try {
+                                                                            val bytes = file.readBytes()
+                                                                            val result = com.example.network.GeminiHelper.transcribeAudio(bytes, "audio/m4a")
+                                                                            transcribedText = result
+                                                                        } catch (e: Exception) {
+                                                                            transcribedText = "خطا در پیاده‌سازی صدا: ${e.localizedMessage}"
+                                                                        } finally {
+                                                                            isTranscribingWorking = false
+                                                                        }
+                                                                    }
+                                                                } else {
+                                                                    Toast.makeText(context, "فایل صوتی یافت نشد.", Toast.LENGTH_SHORT).show()
+                                                                }
+                                                            },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = SoftCrimson),
+                                                            shape = RoundedCornerShape(12.dp)
+                                                        ) {
+                                                            Icon(Icons.Default.Stop, contentDescription = null, tint = Color.White)
+                                                            Spacer(modifier = Modifier.width(6.dp))
+                                                            Text("توقف ضبط و پردازش", color = Color.White, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Loading Progress
+                                        if (isTranscribingWorking) {
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.5f))
+                                            ) {
+                                                Row(
+                                                    modifier = Modifier.padding(16.dp),
+                                                    horizontalArrangement = Arrangement.Center,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    CircularProgressIndicator(color = AccentGold, modifier = Modifier.size(24.dp))
+                                                    Spacer(modifier = Modifier.width(12.dp))
+                                                    Text("هوش مصنوعی دادرس در حال رونویسی شواهد کلامی شما است...", style = Typography.bodySmall, color = AccentGold)
+                                                }
+                                            }
+                                        }
+
+                                        // Transcribed Result
+                                        if (transcribedText.isNotBlank()) {
+                                            Text("متن رونویسی شده فارسی گفتار:", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            Card(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                colors = CardDefaults.cardColors(containerColor = surfaceColor),
+                                                shape = RoundedCornerShape(16.dp)
+                                            ) {
+                                                Column(
+                                                    modifier = Modifier.padding(16.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                                ) {
+                                                    Text(
+                                                        text = transcribedText,
+                                                        style = Typography.bodyMedium,
+                                                        color = onBgColor,
+                                                        textAlign = TextAlign.Right,
+                                                        modifier = Modifier.fillMaxWidth()
+                                                    )
+
+                                                    HorizontalDivider(color = glassBorderColor.copy(alpha = 0.5f))
+
+                                                    Row(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                                        verticalAlignment = Alignment.CenterVertically
+                                                    ) {
+                                                        // Left Actions
+                                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                            IconButton(onClick = {
+                                                                transcribedText = ""
+                                                            }) {
+                                                                Icon(Icons.Default.Delete, contentDescription = "پاک کردن", tint = SoftCrimson)
+                                                            }
+                                                            IconButton(onClick = {
+                                                                copyToClipboard(context, "Transcribed Audio Text", transcribedText)
+                                                                Toast.makeText(context, "متن در حافظه موقت کپی شد.", Toast.LENGTH_SHORT).show()
+                                                            }) {
+                                                                Icon(Icons.Default.ContentCopy, contentDescription = "کپی", tint = AccentGold)
+                                                            }
+                                                        }
+
+                                                        // Add to Analysis List Action
+                                                        Button(
+                                                            onClick = {
+                                                                val currentDocs = selectedAnalysisDocs.toMutableList()
+                                                                currentDocs.add(Pair("صوت_رونویسی_شده_${System.currentTimeMillis() / 1000}.txt", transcribedText))
+                                                                selectedAnalysisDocs = currentDocs
+                                                                activeTab = "analysis"
+                                                                Toast.makeText(context, "متن صوت با موفقیت به لیست اسناد دادرسی اضافه شد.", Toast.LENGTH_LONG).show()
+                                                            },
+                                                            colors = ButtonDefaults.buttonColors(containerColor = primaryColor),
+                                                            shape = RoundedCornerShape(8.dp)
+                                                        ) {
+                                                            Icon(Icons.Default.Add, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Text("افزودن به تحلیل اسناد به عنوان لایحه خام", style = Typography.labelSmall, color = Color.White)
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ====================================
+                                //   4. TAB: CASES PORTFOLIO (History Archive)
+                                // ====================================
+                                "cases" -> {
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                                    ) {
+                                        Text(
+                                            text = "آرشیو پرونده‌ها و مستندات دادرسی",
+                                            style = Typography.headlineMedium,
+                                            color = onBgColor,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        if (!isWideScreen) {
+                                            CollapsibleNewRequestTab(
+                                                isDark = isDark,
+                                                surfaceColor = surfaceColor,
+                                                glassBorderColor = glassBorderColor,
+                                                onBgColor = onBgColor,
+                                                onSurfaceColor = onSurfaceColor,
+                                                onNavigateToWizard = onNavigateToWizard
+                                            )
+                                        }
+
+                                        // Search Bar
+                                        OutlinedTextField(
+                                            value = searchQuery,
+                                            onValueChange = { searchQuery = it },
+                                            placeholder = { Text("جستجو در پرونده‌ها یا لوایح دفاعیه...", color = onSurfaceColor) },
+                                            singleLine = true,
+                                            trailingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = AccentGold) },
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = OutlinedTextFieldDefaults.colors(
+                                                focusedTextColor = onBgColor,
+                                                unfocusedTextColor = onBgColor,
+                                                focusedBorderColor = AccentGold,
+                                                unfocusedBorderColor = glassBorderColor
+                                            )
+                                        )
+
+                                        // Filters Row
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            // Categorical Filter
+                                            var showFilterDropdown by remember { mutableStateOf(false) }
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                Button(
+                                                    onClick = { showFilterDropdown = true },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = surfaceColor),
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    border = BorderStroke(1.dp, glassBorderColor),
+                                                    shape = RoundedCornerShape(10.dp)
+                                                ) {
+                                                    Text("دسته: $caseTypeFilter", color = onBgColor, style = Typography.labelMedium)
+                                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AccentGold)
+                                                }
+                                                DropdownMenu(expanded = showFilterDropdown, onDismissRequest = { showFilterDropdown = false }) {
+                                                    listOf("همه", "شکایت", "دادخواست", "لایحه دفاعیه", "تحلیل سند هوشمند").forEach { type ->
+                                                        DropdownMenuItem(text = { Text(type) }, onClick = {
+                                                            caseTypeFilter = type
+                                                            showFilterDropdown = false
+                                                        })
+                                                    }
+                                                }
+                                            }
+
+                                            // Sort Selector
+                                            var showSortDropdown by remember { mutableStateOf(false) }
+                                            Box(modifier = Modifier.weight(1f)) {
+                                                Button(
+                                                    onClick = { showSortDropdown = true },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = surfaceColor),
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    border = BorderStroke(1.dp, glassBorderColor),
+                                                    shape = RoundedCornerShape(10.dp)
+                                                ) {
+                                                    Text("ترتیب: $caseSortOrder", color = onBgColor, style = Typography.labelMedium)
+                                                    Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = AccentGold)
+                                                }
+                                                DropdownMenu(expanded = showSortDropdown, onDismissRequest = { showSortDropdown = false }) {
+                                                    listOf("جدیدترین", "قدیمی‌ترین", "الفبایی الف-ی", "بالاترین امتیاز").forEach { order ->
+                                                        DropdownMenuItem(text = { Text(order) }, onClick = {
+                                                            caseSortOrder = order
+                                                            showSortDropdown = false
+                                                        })
+                                                    }
+                                                }
+                                            }
+                                        }
+
+                                        // Filtering & Sorting calculations
+                                        val initialFiltered = cases.filter {
+                                            (caseTypeFilter == "همه" || it.type == caseTypeFilter) &&
+                                            (it.title.contains(searchQuery) || it.type.contains(searchQuery) || it.legalPosition.contains(searchQuery))
+                                        }
+
+                                        val sortedCases = when (caseSortOrder) {
+                                            "جدیدترین" -> initialFiltered.sortedByDescending { it.timestamp }
+                                            "قدیمی‌ترین" -> initialFiltered.sortedBy { it.timestamp }
+                                            "الفبایی الف-ی" -> initialFiltered.sortedBy { it.title }
+                                            "بالاترین امتیاز" -> initialFiltered.sortedByDescending { it.confidenceScore }
+                                            else -> initialFiltered
+                                        }
+
+                                        if (sortedCases.isEmpty()) {
+                                            Column(
+                                                modifier = Modifier.weight(1f).fillMaxWidth(),
+                                                horizontalAlignment = Alignment.CenterHorizontally,
+                                                verticalArrangement = Arrangement.Center
+                                            ) {
+                                                Icon(Icons.Default.Info, contentDescription = null, tint = onSurfaceColor, modifier = Modifier.size(56.dp))
+                                                Spacer(modifier = Modifier.height(12.dp))
+                                                Text("پرونده‌ای یافت نشد.", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                            }
+                                        } else {
+                                            LazyColumn(
+                                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                                modifier = Modifier.weight(1f).fillMaxWidth()
+                                            ) {
+                                                items(sortedCases) { case ->
+                                                    Card(
+                                                        modifier = Modifier.fillMaxWidth(),
+                                                        colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                                    ) {
+                                                        Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Box(
+                                                                    modifier = Modifier
+                                                                        .background(primaryColor.copy(alpha = 0.12f), RoundedCornerShape(6.dp))
+                                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                                                ) {
+                                                                    Text(text = case.type, style = Typography.labelSmall, color = primaryColor)
+                                                                }
+                                                                Text(text = case.title, style = Typography.bodyLarge, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                            }
+
+                                                            Text(text = case.description, style = Typography.bodySmall, color = onSurfaceColor, maxLines = 2)
+
+                                                            Divider(color = glassBorderColor.copy(alpha = 0.4f))
+
+                                                            // Custom persistent interactions: Reopen, Duplicate, Export, Delete
+                                                            Row(
+                                                                modifier = Modifier.fillMaxWidth(),
+                                                                horizontalArrangement = Arrangement.SpaceBetween,
+                                                                verticalAlignment = Alignment.CenterVertically
+                                                            ) {
+                                                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                                    // Delete Action with safety
+                                                                    IconButton(onClick = {
+                                                                        citizenViewModel.deleteCase(case.id, session?.username ?: "کاربر عادی")
+                                                                        Toast.makeText(context, "پرونده حذف گردید.", Toast.LENGTH_SHORT).show()
+                                                                    }) {
+                                                                        Icon(Icons.Default.Delete, contentDescription = "حذف مجرا", tint = SoftCrimson, modifier = Modifier.size(20.dp))
+                                                                    }
+
+                                                                    // Duplicate Action (cross-sessions persistent)
+                                                                    IconButton(onClick = {
+                                                                        scope.launch {
+                                                                            val duplicatedCase = case.copy(
+                                                                                id = 0,
+                                                                                title = "رونوشت - ${case.title}",
+                                                                                timestamp = System.currentTimeMillis()
+                                                                            )
+                                                                            withContext(Dispatchers.IO) {
+                                                                                db.caseDao().insertCase(duplicatedCase)
+                                                                            }
+                                                                            Toast.makeText(context, "رونوشت با موفقیت ایجاد شد.", Toast.LENGTH_SHORT).show()
+                                                                        }
+                                                                    }) {
+                                                                        Icon(Icons.Default.CopyAll, contentDescription = "تکثیر سند", tint = AccentGold, modifier = Modifier.size(20.dp))
+                                                                    }
+
+                                                                    // Export Action (shares or copies content)
+                                                                    IconButton(onClick = {
+                                                                        copyToClipboard(context, "Document Output", case.unifiedOutput)
+                                                                        Toast.makeText(context, "متن سند قضایی صادر و در کلیپ‌برد ذخیره شد.", Toast.LENGTH_SHORT).show()
+                                                                    }) {
+                                                                        Icon(Icons.Default.ContentCopy, contentDescription = "کپی لایحه", tint = primaryColor, modifier = Modifier.size(20.dp))
+                                                                    }
+                                                                }
+
+                                                                // Reopen Action (view details securely)
+                                                                Button(
+                                                                    onClick = { activeViewingCase = case },
+                                                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                                                    shape = RoundedCornerShape(8.dp)
+                                                                ) {
+                                                                    Text("مشاهده جزئیات سند", color = Color.Black, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // ====================================
+                                //   5. TAB: AUTHENTICATED APPEARANCE SETTINGS
+                                // ====================================
+                                "settings" -> {
+                                    var isOcrEnabled by remember { mutableStateOf(true) }
+                                    var isVoicePromptEnabled by remember { mutableStateOf(false) }
+
+                                    Column(
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .padding(16.dp)
+                                            .verticalScroll(rememberScrollState()),
+                                        verticalArrangement = Arrangement.spacedBy(16.dp),
+                                        horizontalAlignment = Alignment.Start
+                                    ) {
+                                        Text(
+                                            text = "تنظیمات پایانه و هویت کاربری",
+                                            style = Typography.headlineMedium,
+                                            color = onBgColor,
+                                            fontWeight = FontWeight.Bold,
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+
+                                        // Profile Details Card (formerly in standalone profile tab)
+                                        Card(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth(),
+                                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                                    verticalAlignment = Alignment.CenterVertically
+                                                ) {
+                                                    Icon(Icons.Default.Person, contentDescription = null, tint = AccentGold)
+                                                    Text("مشخصات کاربری صاحب لایحه", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                }
+                                                Divider(color = glassBorderColor)
+                                                ProfileRow(title = "شناسه ورود", valText = session?.username ?: "نامشخص")
+                                                ProfileRow(title = "سطح دسترسی سیستم", valText = session?.role?.name ?: "کاربر عادی دادرسی")
+                                                ProfileRow(title = "کد ارزیابی دادخواه", valText = "MSRK-2966-IR")
+                                            }
+                                        }
+
+                                        // Appearance Customization Controls (moved from Login Screen)
+                                        Text("شخصی‌سازی رابط گرافیکی پایانه دادرس:", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                        
+                                        // Dark theme toggle
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .background(surfaceColor, RoundedCornerShape(12.dp))
-                                                .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
                                                 .padding(16.dp),
                                             horizontalArrangement = Arrangement.SpaceBetween,
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Text(ev.third, style = Typography.labelSmall, color = AccentGold)
+                                            Switch(checked = !isDark, onCheckedChange = { authViewModel.toggleTheme() })
                                             Column(horizontalAlignment = Alignment.End) {
-                                                Text(ev.first, style = Typography.bodyLarge, color = onBgColor, fontWeight = FontWeight.Bold)
-                                                Text(ev.second, style = Typography.labelMedium, color = onSurfaceColor)
+                                                Text("تم روشن / تم تاریک سیستمی", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                Text("انتخاب میان ساختار بصری شب و روز", style = Typography.labelSmall, color = onSurfaceColor)
                                             }
                                         }
-                                    }
-                                }
-                            }
 
-                            "notifications" -> {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                ) {
-                                    Text(
-                                        text = "صندوق پستی و اعلانات ورودی",
-                                        style = Typography.headlineMedium,
-                                        color = onBgColor,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                        textAlign = TextAlign.Right
-                                    )
-
-                                    LazyColumn(
-                                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                                        modifier = Modifier.fillMaxSize()
-                                    ) {
-                                        items(notifications) { notif ->
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .background(surfaceColor, RoundedCornerShape(16.dp))
-                                                    .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp))
-                                                    .padding(16.dp)
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.End,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = notif,
-                                                        style = Typography.bodyMedium,
-                                                        color = onBgColor,
-                                                        modifier = Modifier.weight(1f),
-                                                        textAlign = TextAlign.Right
-                                                    )
-                                                    Spacer(modifier = Modifier.width(12.dp))
-                                                    Icon(Icons.Default.Notifications, contentDescription = null, tint = primaryColor)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            "profile" -> {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                                ) {
-                                    Text(
-                                        text = "مشخصات و امضای الکترونیکی قضایی",
-                                        style = Typography.headlineMedium,
-                                        color = onBgColor,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.fillMaxWidth(),
-                                        textAlign = TextAlign.Right
-                                    )
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(80.dp)
-                                            .background(surfaceColor, CircleShape)
-                                            .border(2.dp, AccentGold, CircleShape),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(Icons.Default.Person, contentDescription = null, tint = AccentGold, modifier = Modifier.size(40.dp))
-                                    }
-
-                                    Text(session?.username ?: "کاربر گرامی", style = Typography.titleLarge, color = onBgColor, fontWeight = FontWeight.Bold)
-                                    Text("شناسه کاربری: ۲۸۱۸۲۷۱۲۳۸ | وضعیت تایید: نقره‌ای", style = Typography.labelMedium, color = MaterialTheme.colorScheme.tertiary)
-
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth().glassy3D(cornerRadius = 16.dp, glowColor = primaryColor.copy(alpha = 0.08f)),
-                                        colors = CardDefaults.cardColors(containerColor = Color.Transparent)
-                                    ) {
-                                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            ProfileRow("محدوده آدرس ملی الکترونیکی", "سامانه دادرسی رسمی")
-                                            ProfileRow("اعتبار گواهی تا تاریخ", "۱۴۰۶/۱۲/۲۹")
-                                            ProfileRow("سهمیه امبدینگ RAG فضا", "باقیمانده ۹۸ درخواست")
-                                            ProfileRow("کارت هوشمند امضاء الکترونیک", "فعال و ثبت شده")
-                                            Card(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable { 
-                                                        prevTabBeforeApis = "profile"
-                                                        activeTab = "apis"
-                                                    }
-                                                    .glassy3D(cornerRadius = 16.dp, glowColor = AccentGold.copy(alpha = 0.15f)),
-                                                colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.5f))
-                                            ) {
-                                                Row(
-                                                    modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(Icons.Default.KeyboardArrowLeft, contentDescription = null, tint = AccentGold)
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Column(horizontalAlignment = Alignment.End) {
-                                                            Text("کلیدهای امنیتی هوش مصنوعی (APIs)", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                                            Text("تنظیم کلیدهای دلخواه و رایگان گوگل و سایر مدل‌ها", style = Typography.labelSmall, color = onSurfaceColor)
-                                                        }
-                                                        Spacer(modifier = Modifier.width(12.dp))
-                                                        Icon(Icons.Default.Lock, contentDescription = null, tint = AccentGold)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    Button(
-                                        onClick = { authViewModel.logout() },
-                                        colors = ButtonDefaults.buttonColors(containerColor = SoftCrimson),
-                                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text("خروج امن از حساب کاربری", color = Color.White, fontWeight = FontWeight.Bold)
-                                    }
-                                }
-                            }
-
-                            "settings" -> {
-                                var isOcrEnabled by remember { mutableStateOf(true) }
-                                var isVoicePromptEnabled by remember { mutableStateOf(false) }
-
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    Text(
-                                        text = "تنظیمات دستگاه دادرس",
-                                        style = Typography.headlineMedium,
-                                        color = onBgColor,
-                                        fontWeight = FontWeight.Bold,
-                                        textAlign = TextAlign.Right
-                                    )
-
-                                    Text("مجموعه تنظیمات محلی و دسترسی‌ها:", style = Typography.bodyMedium, color = onSurfaceColor)
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().background(surfaceColor, RoundedCornerShape(12.dp)).padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Switch(checked = isOcrEnabled, onCheckedChange = { isOcrEnabled = it })
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text("استخراج خودکار عکس اسناد (OCR)", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                            Text("تبدیل تصاویر شواهد به متون مستند", style = Typography.labelSmall, color = onSurfaceColor)
-                                        }
-                                    }
-
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth().background(surfaceColor, RoundedCornerShape(12.dp)).padding(16.dp),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Switch(checked = isVoicePromptEnabled, onCheckedChange = { isVoicePromptEnabled = it })
-                                        Column(horizontalAlignment = Alignment.End) {
-                                            Text("دستیار صوتی و فرمان صادرکننده", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                            Text("خواندن بلایح تولید شده به فارسی", style = Typography.labelSmall, color = onSurfaceColor)
-                                        }
-                                    }
-
-                                    Card(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable { 
-                                                prevTabBeforeApis = "settings"
-                                                activeTab = "apis"
-                                            }
-                                            .glassy3D(cornerRadius = 12.dp, glowColor = AccentGold.copy(alpha = 0.1f)),
-                                        colors = CardDefaults.cardColors(containerColor = surfaceColor.copy(alpha = 0.5f))
-                                    ) {
+                                        // Dynamic movement space background motion toggle
                                         Row(
-                                            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-                                            horizontalArrangement = Arrangement.SpaceBetween,
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(Icons.Default.KeyboardArrowLeft, contentDescription = null, tint = AccentGold)
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Column(horizontalAlignment = Alignment.End) {
-                                                    Text("تنظیم کلیدهای API هوش مصنوعی (APIs)", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
-                                                    Text("مدیریت کلیدهای اختصاصی گوگل جمینای، کلود، گراک و غیره", style = Typography.labelSmall, color = onSurfaceColor)
-                                                }
-                                                Spacer(modifier = Modifier.width(12.dp))
-                                                Icon(Icons.Default.Lock, contentDescription = null, tint = AccentGold)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            "apis" -> {
-                                val context = androidx.compose.ui.platform.LocalContext.current
-                                val testScope = androidx.compose.runtime.rememberCoroutineScope()
-                                var testingProvider by remember { mutableStateOf<String?>(null) }
-                                val testConnectionResults = remember { androidx.compose.runtime.mutableStateMapOf<String, String>() }
-                                val testConnectionSuccessStatus = remember { androidx.compose.runtime.mutableStateMapOf<String, Boolean>() }
-
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(16.dp)
-                                        .verticalScroll(rememberScrollState()),
-                                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                                    horizontalAlignment = Alignment.End
-                                ) {
-                                    // Header with Back Option
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        TextButton(onClick = { activeTab = prevTabBeforeApis }) {
-                                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                                Icon(Icons.Default.KeyboardArrowLeft, contentDescription = null, tint = AccentGold)
-                                                Text("بازگشت", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                        Text(
-                                            text = "مدیریت کلیدهای امنیتی (APIs)",
-                                            style = Typography.headlineSmall,
-                                            color = onBgColor,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Right
-                                        )
-                                    }
-
-                                    Text(
-                                        text = "جهت پایداری کامل و استفاده نامحدود، می‌توانید ۱ تا ۳ کلید اختصاصی برای هر سرویس هوش مصنوعی ثبت کنید. کلیدها تنها روی دستگاه شما ذخیره شده و امنیت آن‌ها کاملاً تضمین شده است.",
-                                        style = Typography.labelSmall,
-                                        color = onSurfaceColor,
-                                        textAlign = TextAlign.Right,
-                                        modifier = Modifier.fillMaxWidth()
-                                    )
-
-                                    Divider(color = glassBorderColor)
-
-                                    // Helper function to render a providers' section
-                                    @Composable
-                                    fun ProviderApiSection(
-                                        providerId: String,
-                                        title: String,
-                                        consoleUrl: String,
-                                        consoleLabel: String,
-                                        hintPrefix: String,
-                                        keysList: List<String>,
-                                        fieldsCount: Int,
-                                        onIncrementFields: () -> Unit,
-                                        onKeyChange: (Int, String) -> Unit
-                                    ) {
-                                        Column(
-                                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                                            horizontalAlignment = Alignment.End,
                                             modifier = Modifier
                                                 .fillMaxWidth()
                                                 .background(surfaceColor, RoundedCornerShape(12.dp))
-                                                .border(1.dp, glassBorderColor, RoundedCornerShape(12.dp))
-                                                .padding(16.dp)
+                                                .padding(16.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                val hasActiveKey = keysList.any { it.isNotBlank() }
-                                                Row(
-                                                    verticalAlignment = Alignment.CenterVertically,
-                                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(if (hasActiveKey) SoftEmerald.copy(alpha = 0.15f) else Color.White.copy(alpha = 0.05f))
-                                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                                ) {
-                                                    Box(
-                                                        modifier = Modifier
-                                                            .size(8.dp)
-                                                            .clip(CircleShape)
-                                                            .background(if (hasActiveKey) SoftEmerald else Color.Gray)
-                                                    )
-                                                    Text(
-                                                        text = if (hasActiveKey) "فعال" else "غیرفعال",
-                                                        color = if (hasActiveKey) SoftEmerald else Color.Gray,
-                                                        style = Typography.labelSmall,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-                                                Text(
-                                                    text = title, 
-                                                    style = Typography.titleMedium, 
-                                                    color = AccentGold, 
-                                                    fontWeight = FontWeight.Bold, 
-                                                    textAlign = TextAlign.Right
-                                                )
-                                            }
-                                            
-                                            // Navigation & Help Guide icons
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                // 1. Help Guide Option
-                                                Row(
-                                                    modifier = Modifier
-                                                        .clip(RoundedCornerShape(6.dp))
-                                                        .background(AccentGold.copy(alpha = 0.1f))
-                                                        .clickable { showGuideForProvider = providerId }
-                                                        .padding(horizontal = 8.dp, vertical = 4.dp),
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Icon(Icons.Default.Info, contentDescription = "راهنما", tint = AccentGold, modifier = Modifier.size(14.dp))
-                                                    Spacer(modifier = Modifier.width(4.dp))
-                                                    Text(
-                                                        text = "راهنمای دریافت رایگان کلید",
-                                                        style = Typography.labelSmall,
-                                                        color = AccentGold,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-
-                                                // 2. Link to Console
-                                                Row(
-                                                    modifier = Modifier.clickable {
-                                                        try {
-                                                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(consoleUrl))
-                                                            context.startActivity(intent)
-                                                        } catch (e: Exception) {
-                                                            e.printStackTrace()
-                                                        }
-                                                    },
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = consoleLabel,
-                                                        style = Typography.labelSmall,
-                                                        color = AccentGold,
-                                                        textDecoration = androidx.compose.ui.text.style.TextDecoration.Underline,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                }
-                                            }
-
-                                            // Inputs up to fieldsCount
-                                            for (i in 0 until fieldsCount) {
-                                                val v = keysList.getOrNull(i) ?: ""
-                                                val keyId = "${providerId}_$i"
-                                                val isRevealed = revealedKeys[keyId] == true
-
-                                                OutlinedTextField(
-                                                    value = v,
-                                                    onValueChange = { onKeyChange(i, it) },
-                                                    placeholder = { Text("کلید شماره ${i+1} $hintPrefix...", color = onSurfaceColor.copy(alpha = 0.5f), fontSize = 12.sp) },
-                                                    singleLine = true,
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .padding(vertical = 2.dp)
-                                                        .testTag("api_key_${providerId}_$i"),
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    visualTransformation = if (isRevealed) VisualTransformation.None else PasswordVisualTransformation(),
-                                                    trailingIcon = {
-                                                        IconButton(onClick = { revealedKeys[keyId] = !isRevealed }) {
-                                                            Icon(
-                                                                imageVector = if (isRevealed) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                                                contentDescription = if (isRevealed) "پنهان‌سازی" else "نمایش",
-                                                                tint = onSurfaceColor.copy(alpha = 0.7f),
-                                                                modifier = Modifier.size(20.dp)
-                                                            )
-                                                        }
-                                                    },
-                                                    colors = OutlinedTextFieldDefaults.colors(
-                                                        focusedTextColor = onBgColor,
-                                                        unfocusedTextColor = onBgColor,
-                                                        focusedBorderColor = AccentGold,
-                                                        unfocusedBorderColor = glassBorderColor,
-                                                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                                                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                                                    )
-                                                )
-                                            }
-
-                                            // Add backup key option
-                                            if (fieldsCount < 3) {
-                                                Row(
-                                                    modifier = Modifier
-                                                        .fillMaxWidth()
-                                                        .clickable { onIncrementFields() }
-                                                        .padding(vertical = 4.dp),
-                                                    horizontalArrangement = Arrangement.End,
-                                                    verticalAlignment = Alignment.CenterVertically
-                                                ) {
-                                                    Text(
-                                                        text = "افزودن کلید پشتیبان (زاپاس) ${fieldsCount + 1}",
-                                                        style = Typography.labelSmall,
-                                                        color = AccentGold,
-                                                        fontWeight = FontWeight.Bold
-                                                    )
-                                                    Spacer(modifier = Modifier.width(6.dp))
-                                                    Icon(
-                                                        imageVector = Icons.Default.Add,
-                                                        contentDescription = "افزودن",
-                                                        tint = AccentGold,
-                                                        modifier = Modifier
-                                                            .size(18.dp)
-                                                            .border(1.dp, AccentGold, CircleShape)
-                                                            .padding(2.dp)
-                                                    )
-                                                }
-                                            }
-
-                                            // Diagnostic test and Deletion Row
-                                            Row(
-                                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                                horizontalArrangement = Arrangement.SpaceBetween,
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                // Clear Keys Button
-                                                TextButton(
-                                                    onClick = {
-                                                        for (idx in 0..2) {
-                                                            onKeyChange(idx, "")
-                                                        }
-                                                        testConnectionResults.remove(providerId)
-                                                        testConnectionSuccessStatus.remove(providerId)
-                                                    },
-                                                    colors = ButtonDefaults.textButtonColors(contentColor = SoftCrimson)
-                                                ) {
-                                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                                        Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(16.dp))
-                                                        Spacer(modifier = Modifier.width(4.dp))
-                                                        Text("پاکسازی کلیدها", style = Typography.labelSmall, fontWeight = FontWeight.Bold)
-                                                    }
-                                                }
-
-                                                // Test connection Button
-                                                val isTesting = testingProvider == providerId
-                                                Button(
-                                                    onClick = {
-                                                        val activeKey = keysList.firstOrNull { it.isNotBlank() } ?: ""
-                                                        if (activeKey.isBlank()) {
-                                                            testConnectionResults[providerId] = "لطفاً ابتدا یک کلید معتبر وارد نمایید."
-                                                            testConnectionSuccessStatus[providerId] = false
-                                                            return@Button
-                                                        }
-                                                        testScope.launch {
-                                                            testingProvider = providerId
-                                                            testConnectionResults[providerId] = "در حال اتصال به سرور جهت سنجش اعتبار..."
-                                                            try {
-                                                                val res = com.example.network.AiOrchestrator.testProviderConnection(providerId, activeKey)
-                                                                testConnectionResults[providerId] = res
-                                                                testConnectionSuccessStatus[providerId] = true
-                                                            } catch (e: Exception) {
-                                                                testConnectionResults[providerId] = "تست ناموفق: ${e.localizedMessage ?: "زمان درخواست به پایان رسید"}"
-                                                                testConnectionSuccessStatus[providerId] = false
-                                                            } finally {
-                                                                testingProvider = null
-                                                            }
-                                                        }
-                                                    },
-                                                    enabled = !isTesting,
-                                                    colors = ButtonDefaults.buttonColors(
-                                                        containerColor = if (testConnectionSuccessStatus[providerId] == true) SoftEmerald else AccentGold,
-                                                        disabledContainerColor = AccentGold.copy(alpha = 0.5f)
-                                                    ),
-                                                    shape = RoundedCornerShape(8.dp),
-                                                    modifier = Modifier.height(32.dp),
-                                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp)
-                                                ) {
-                                                    if (isTesting) {
-                                                        CircularProgressIndicator(
-                                                            modifier = Modifier.size(14.dp),
-                                                            color = Color.White,
-                                                            strokeWidth = 2.dp
-                                                        )
-                                                    } else {
-                                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                                            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(14.dp))
-                                                            Spacer(modifier = Modifier.width(4.dp))
-                                                            Text("تست اتصال نهایی", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White)
-                                                        }
-                                                    }
-                                                }
-                                            }
-
-                                            // Connection status text message
-                                            val connMsg = testConnectionResults[providerId]
-                                            if (!connMsg.isNullOrBlank()) {
-                                                val scoreSucceed = testConnectionSuccessStatus[providerId] == true
-                                                Text(
-                                                    text = connMsg,
-                                                    style = Typography.labelSmall,
-                                                    color = if (scoreSucceed) SoftEmerald else SoftCrimson,
-                                                    textAlign = TextAlign.Right,
-                                                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp)
-                                                )
+                                            Switch(checked = isDynamicBg, onCheckedChange = { authViewModel.toggleDynamicBackground() })
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text("پس‌زمینه متحرک معلق", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                Text("حالت گرافیکی شیشه‌ای همراه با حرکت فضا", style = Typography.labelSmall, color = onSurfaceColor)
                                             }
                                         }
-                                    }
 
-                                    // Render 6 Services
-                                    ProviderApiSection(
-                                        providerId = "gemini",
-                                        title = "کلیدهای اختصاصی Google Gemini API (رایگان)",
-                                        consoleUrl = "https://aistudio.google.com/app/apikey",
-                                        consoleLabel = "دریافت کلید رسمی گوگل جمینای",
-                                        hintPrefix = "جمینای (مثال: AIzaSy...)",
-                                        keysList = tempGeminiKeys,
-                                        fieldsCount = geminiFieldsToShow,
-                                        onIncrementFields = { geminiFieldsToShow = minOf(3, geminiFieldsToShow + 1) },
-                                        onKeyChange = { idx, valStr ->
-                                            val updated = tempGeminiKeys.toMutableList()
-                                            while (updated.size <= idx) updated.add("")
-                                            updated[idx] = valStr
-                                            tempGeminiKeys = updated
-                                        }
-                                    )
-
-                                    ProviderApiSection(
-                                        providerId = "openrouter",
-                                        title = "کلیدهای اختصاصی OpenRouter API",
-                                        consoleUrl = "https://openrouter.ai/keys",
-                                        consoleLabel = "کسب کلید اپن‌روتر",
-                                        hintPrefix = "اپن‌روتر (مثال: sk-or-...)",
-                                        keysList = tempOpenRouterKeys,
-                                        fieldsCount = openRouterFieldsToShow,
-                                        onIncrementFields = { openRouterFieldsToShow = minOf(3, openRouterFieldsToShow + 1) },
-                                        onKeyChange = { idx, valStr ->
-                                            val updated = tempOpenRouterKeys.toMutableList()
-                                            while (updated.size <= idx) updated.add("")
-                                            updated[idx] = valStr
-                                            tempOpenRouterKeys = updated
-                                        }
-                                    )
-
-                                    ProviderApiSection(
-                                        providerId = "openai",
-                                        title = "کلیدهای اختصاصی OpenAI API (ChatGPT)",
-                                        consoleUrl = "https://platform.openai.com/api-keys",
-                                        consoleLabel = "مدیریت و صدور کلیدهای OpenAI",
-                                        hintPrefix = "اپن‌ای‌آی (مثال: sk-proj-...)",
-                                        keysList = tempOpenAiKeys,
-                                        fieldsCount = openAiFieldsToShow,
-                                        onIncrementFields = { openAiFieldsToShow = minOf(3, openAiFieldsToShow + 1) },
-                                        onKeyChange = { idx, valStr ->
-                                            val updated = tempOpenAiKeys.toMutableList()
-                                            while (updated.size <= idx) updated.add("")
-                                            updated[idx] = valStr
-                                            tempOpenAiKeys = updated
-                                        }
-                                    )
-
-                                    ProviderApiSection(
-                                        providerId = "groq",
-                                        title = "کلیدهای اختصاصی Groq API (رایگان پرسرعت)",
-                                        consoleUrl = "https://console.groq.com/keys",
-                                        consoleLabel = "کسب کلید رایگان گراک",
-                                        hintPrefix = "گراک (مثال: gsk-...)",
-                                        keysList = tempGroqKeys,
-                                        fieldsCount = groqFieldsToShow,
-                                        onIncrementFields = { groqFieldsToShow = minOf(3, groqFieldsToShow + 1) },
-                                        onKeyChange = { idx, valStr ->
-                                            val updated = tempGroqKeys.toMutableList()
-                                            while (updated.size <= idx) updated.add("")
-                                            updated[idx] = valStr
-                                            tempGroqKeys = updated
-                                        }
-                                    )
-
-                                    ProviderApiSection(
-                                        providerId = "cohere",
-                                        title = "کلیدهای اختصاصی Cohere API (رایگان چندزبانه)",
-                                        consoleUrl = "https://dashboard.cohere.com/api-keys",
-                                        consoleLabel = "کسب کلید توسعه‌دهنده کوهر",
-                                        hintPrefix = "کوهر (مثال: co_...)",
-                                        keysList = tempCohereKeys,
-                                        fieldsCount = cohereFieldsToShow,
-                                        onIncrementFields = { cohereFieldsToShow = minOf(3, cohereFieldsToShow + 1) },
-                                        onKeyChange = { idx, valStr ->
-                                            val updated = tempCohereKeys.toMutableList()
-                                            while (updated.size <= idx) updated.add("")
-                                            updated[idx] = valStr
-                                            tempCohereKeys = updated
-                                        }
-                                    )
-
-                                    ProviderApiSection(
-                                        providerId = "hf",
-                                        title = "کلیدهای اختصاصی Hugging Face API (رایگان لاما)",
-                                        consoleUrl = "https://huggingface.co/settings/tokens",
-                                        consoleLabel = "صدور توکن امنیتی هاگینگ‌فیس",
-                                        hintPrefix = "هاگینگ‌فیس (مثال: hf_...)",
-                                        keysList = tempHuggingFaceKeys,
-                                        fieldsCount = huggingFaceFieldsToShow,
-                                        onIncrementFields = { huggingFaceFieldsToShow = minOf(3, huggingFaceFieldsToShow + 1) },
-                                        onKeyChange = { idx, valStr ->
-                                            val updated = tempHuggingFaceKeys.toMutableList()
-                                            while (updated.size <= idx) updated.add("")
-                                            updated[idx] = valStr
-                                            tempHuggingFaceKeys = updated
-                                        }
-                                    )
-
-                                    Spacer(modifier = Modifier.height(10.dp))
-
-                                    Button(
-                                        onClick = {
-                                            adminViewModel.saveMultiApiKeys(
-                                                gemini = tempGeminiKeys,
-                                                openRouter = tempOpenRouterKeys,
-                                                openAi = tempOpenAiKeys,
-                                                groq = tempGroqKeys,
-                                                cohere = tempCohereKeys,
-                                                huggingFace = tempHuggingFaceKeys,
-                                                proxyUrl = adminViewModel.geminiProxyUrl.value
-                                            )
-                                            apiKeysSavedSuccess = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
-                                        modifier = Modifier.fillMaxWidth().height(48.dp),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Text(
-                                            text = "بروزرسانی و ثبت کلیدهای اختصاصی کاربری",
-                                            style = Typography.bodyMedium,
-                                            color = Color.White,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-
-                                    if (apiKeysSavedSuccess) {
-                                        Text(
-                                            text = "تغییرات با موفقیت در این تلفن ذخیره و فعال شد!",
-                                            color = SoftEmerald,
-                                            style = Typography.bodyMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            textAlign = TextAlign.Right,
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
-                                    }
-
-                                    // Dynamic Step-by-Step guides as a dialog
-                                    if (showGuideForProvider != null) {
-                                        val provider = showGuideForProvider!!
-                                        var guideTab by remember(showGuideForProvider) { mutableStateOf(0) }
-                                        
-                                        val titleText = when (provider) {
-                                            "gemini" -> "مرکز راهنمایی Google Gemini"
-                                            "openrouter" -> "مرکز راهنمایی OpenRouter"
-                                            "openai" -> "مرکز راهنمایی OpenAI Platform"
-                                            "groq" -> "مرکز راهنمایی Groq LPU"
-                                            "cohere" -> "مرکز راهنمایی Cohere"
-                                            "hf" -> "مرکز راهنمایی Hugging Face"
-                                            else -> "راهنمای اتصال هوش مستقل"
-                                        }
-
-                                        val tabHeaders = listOf(
-                                            "کلی (Overview)",
-                                            "ثبت‌نام (Register)",
-                                            "دریافت کلید (API Key)",
-                                            "سهمیه رایگان (Free Tier)",
-                                            "پیکربندی (Config)"
-                                        )
-
-                                        val contentText = when (provider) {
-                                            "gemini" -> when (guideTab) {
-                                                0 -> "• ارائه‌دهنده: شرکت بزرگ گوگل (Google AI Studio)\n" +
-                                                     "• برترین مدل‌ها: Gemini 1.5 Pro & Gemini 1.5 Flash\n" +
-                                                     "• مزیت رقابتی: پنجره بافت فوق‌عریض ۲ میلیون توکنی جهت تحلیل عمیق و هوشمند پرونده‌های قضایی پرحجم، خوانش بی‌نظیر مدارک تصویری و نگارش لوایح منقح به زبان محلی شیرین فارسی در کسری از ثانیه."
-                                                1 -> "۱) یک نرم‌افزار عبور از تحریم (قندشکن/پراکسی) با سرور پایدار غیر ایرانی متصل کنید.\n" +
-                                                     "۲) مرورگر دستگاه خود را باز کنید و وارد پرتال رسمی توسعه‌دهندگان گوگل به نشانی aistudio.google.com شوید.\n" +
-                                                     "۳) با حساب جیمیل (Gmail) استاندارد تاییدشده خود لاگین کنید و توافقات اولیه گوگل را تایید نمایید."
-                                                2 -> "۱) در ستون سمت چپ یا منوی ناوبری اصلی کنسول روی دکمه آبی‌رنگ 'Get API Key' کلیک کنید.\n" +
-                                                     "۲) بلافاصله دکمه 'Create API Key' را بفشارید.\n" +
-                                                     "۳) یک پروژه پیش‌فرض حقوقی تعیین کنید و پس از لود کادر رمز، شناسه توکن را کپی کرده و جهت امنیت دائم، در فیلد ورودی دادرس قرار دهید."
-                                                3 -> "گوگل امکاناتی غنی را رایگان عرضه می‌کند:\n" +
-                                                     "• ۱۵ درخواست در هر دقیقه (15 RPM)\n" +
-                                                     "• ۱,۵۰۰ درخواست در روز (1500 RPD)\n" +
-                                                     "• سهمیه ماهانه گسترده بدون نیاز به کارت اعتباری جهت استفاده مستقل و مقرون‌به‌صرفه عامه مردم."
-                                                4 -> "توکن صادر شده از سیستم گوگل همواره باید از کلیپ‌بورد در کادر 'کلید Google Gemini' در این صفحه وارد شود. این کلیدها با عبارت الگویی پیش‌فرض 'AIzaSy' شروع خواهند شد. اطمینان یابید هیچ فضای خالی (فاصله) اضافه در کادر نباشد."
-                                                else -> ""
+                                        // Persian numerical numbers formatting toggle
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(surfaceColor, RoundedCornerShape(12.dp))
+                                                .padding(16.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Switch(checked = isPersianNumbersEnabled, onCheckedChange = { authViewModel.toggleNumberFormat() })
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text("اعداد فارسی محلی", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                Text("نمایش تمامی مبالغ و آمارها به الفبای عددی فارسی", style = Typography.labelSmall, color = onSurfaceColor)
                                             }
-                                            "openrouter" -> when (guideTab) {
-                                                0 -> "• ارائه‌دهنده: پلتفرم باز تجمیع کننده خدمات ابری (OpenRouter.ai)\n" +
-                                                     "• برترین مدل‌ها: Claude 3.5 Sonnet، GPT-4o، DeepSeek V3 و بیش از ۱۵۰ مدل هوش برتر بر لیدربرد جهانی.\n" +
-                                                     "• مزیت رقابتی: بهترین انتخاب برای دور زدن مطمئن تحریم‌ها و اتصال به چندین مغز استدلالی حقوقی پیشرفته در یک فریم‌ورک یکپارچه."
-                                                1 -> "۱) آدرس وب‌سایت اصلی openrouter.ai را در مرورگر تلفن باز فرمایید.\n" +
-                                                     "۲) در بالا راست دکمه 'Sign In' را لمس کنید.\n" +
-                                                     "۳) خیلی ساده می‌توانید با اکانت امن گوگل (جیمیل) خود بدون دردسر ساخت احراز هویت اولیه عضو شوید."
-                                                2 -> "۱) از دایره منوی پروفایل کاربری خود در بالا سمت راست، گزینه 'Settings' و سپس 'Keys' را کلیک کنید.\n" +
-                                                     "۲) دکمه بزرگ 'Create Key' را انتخاب کنید.\n" +
-                                                     "۳) یک نام دلخواه (مثلاً DadrasApp) بنویسید و کلید هوشمند نهایی را فقط برای یک بار نمایش داده شده کپی و نگهداری کنید."
-                                                3 -> "اپن‌روتر دسترسی دائمی به ده‌ها مدل لیدربرد جهانی معروف بالا بالا را ۱۰۰٪ رایگان یا با هزینه‌ای ناچیز (کمتر از چند هزارم دلار) فراهم می‌سازد. مدل‌های پرقدرتی مثل Qwen 2.5-72B و Llama-3 در گیت‌وی اپن‌روتر رایگان و نامحدود هستند."
-                                                4 -> "کلید صادر شده را در باکس ورودی 'کلید OpenRouter' درج کنید. این کلید همواره با عبارت ثابت الگوی 'sk-or-...' آغاز می‌شود که فعال‌ساز تمام ربات‌های هوشمند سیستم خواهد بود."
-                                                else -> ""
-                                            }
-                                            "openai" -> when (guideTab) {
-                                                0 -> "• ارائه‌دهنده: موسسه هوش مصنوعی اوپن ای‌آی (OpenAI platform)\n" +
-                                                     "• برترین مدل‌ها: GPT-4o (سازمانی)، GPT-4-mini\n" +
-                                                     "• مزیت رقابتی: بهینه‌ترین و شیواترین نثر نگارش آرا، لوايح، شکواییه‌ها بر پایه رعایت ادبیات رسمی حقوقی بومی جمهوری اسلامی ایران."
-                                                1 -> "۱) وارد آدرس platform.openai.com مجرای دولوپرهای محترم شوید.\n" +
-                                                     "۲) دکمه 'Sign Up' را بزنید و مراحل ایجاد اکانت را از طریق ایمیل تاییدیه خود پشت سر بگذارید."
-                                                2 -> "۱) در سایدبار سمت راست منوی اکانت هوشمند، وارد زبانه مدیریت اصلی تحت عنوان 'API Keys' شوید.\n" +
-                                                     "۲) دکمه '+ Create new secret key' را انتخاب و یک نام اختیاری بگذارید.\n" +
-                                                     "۳) بلافاصله کپی برداری کلید نهایی را انجام دهید و در جای امن الصاق کنید."
-                                                3 -> "اکانت‌های دولوپر ورودی به این ارائه‌دهنده، در ابتدا معادل ۵ دلار شارژ هدیه رایگان (Trial Credit) دریافت می‌کنند که جهت ساخت، ویرایش و تنظیم صدها صفحه لایحه تخصص قضایی کارآموزان کافی خواهد بود."
-                                                4 -> "کلید اختصاصی برداشته شده را در کارتابل OpenAI ذخیره کنید. این کلیدها از منظر الگویی حتماً با پیشوند استاندارد 'sk-proj-...' شروع خواهند گردید."
-                                                else -> ""
-                                            }
-                                            "groq" -> when (guideTab) {
-                                                0 -> "• ارائه‌دهنده: پایگاه سخت‌افزارهای پردازشی فوق‌سریع لایتنینگ (Groq LPU)\n" +
-                                                     "• برترین مدل‌ها: LLaMA 3.1 70B (توسط متا)، Mixtral 8x7B\n" +
-                                                     "• مزیت رقابتی: پادشاه بلامنازع سرعت استنتاج زبانی دنیا. اگر نیاز دارید در کم‌ترین زمان و با سرعت خیره‌کننده زیر ۱ ثانیه‌ای لوایح اولیه مد نظر به روز رسانی شوند، گراک بی‌همتا است."
-                                                1 -> "۱) به فضا و داشبورد مدیریتی فوق پیشرفته به آدرس console.groq.com مراجعه کنید.\n" +
-                                                     "۲) با زدن مستقیم دکمه جیمیل گوگل، وارد سیستم شوید."
-                                                2 -> "۱) از نوار منوها یا فهرست اصلی پنل، روی بخش 'API Keys' کلیلک داشته باشید.\n" +
-                                                     "۲) روی گزینه 'Create API Key' ضربه بزنید.\n" +
-                                                     "۳) کلید صادر شده را با زدن دکمه کپی به حافظه موقت انتقال دهید."
-                                                3 -> "شرکت معتبر گراک در حال حاضر ۱۰۰٪ آزاد و کاملاً رایگان سهمیه روزانه و ساعتی عظیمی را در اختیار برنامه‌نویسان قرار می‌دهد تا متون حقوقی با غنای عالی و بدون کوچک‌ترین محدودیت شارژ مالی نگارش گردند."
-                                                4 -> "کلید دریافتی دارای فرمت الگوی کلی 'gsk-...' می‌باشد. آن را با دقت برداشته و در کارتابل اختصاصی گراک قرار دهید تا شتاب استنباط آن بیدار شود."
-                                                else -> ""
-                                            }
-                                            "cohere" -> when (guideTab) {
-                                                0 -> "• ارائه‌دهنده: پلتفرم نامی تحقیقاتی کوهر کانادا (Cohere)\n" +
-                                                     "• برترین مدل‌ها: Command R+ & Command R\n" +
-                                                     "• مزیت رقابتی: مدل Command R عمیقاً برای تحلیل موازی زبان‌های بین‌المللی و بومی از جمله زبان فارسی آموزش دیده و در انطباق مواد قانونی فقهی و حقوقی کشور عملکرد موثری دارد."
-                                                1 -> "۱) به پرتال داشبورد و تبلت توسعه‌دهندگان پایگاه به آدرس dashboard.cohere.com مراجعه نمایید.\n" +
-                                                     "۲) با ثبت نام ایمیلی رایگان یک اکانت معتبر اختصاص دهید."
-                                                2 -> "۱) از منوی داشبورد بالا، زبانه 'API Keys' را لمس نموده تا وارد شوید.\n" +
-                                                     "۲) شرکت کوهر در آغاز یک کلید تست تحت عنوان Trial Key پیش فرض در اختیارتان می‌گذارد که بلافاصله کپی برداری آن برای مصارف مستقل در این سیستم آماده می‌باشد."
-                                                3 -> "سهمیه رایگان و آزمایشی این توکن دسترسی برای راستی‌آزمایی و بررسی‌های مستمر نگارش در برنامه دادرس به ارزش ده‌ها درخواست پردازشی در روز ۱۰۰٪ بدون پرداخت وجه پابرجا خواهد بود."
-                                                4 -> "با استفاده از توکن کپی شده به عنوان کلید آزمایشی اختصاصی کوهر، آن را داخل فیلد ثبت کلید 'Cohere' در داشبورد ثبت فرمایید."
-                                                else -> ""
-                                            }
-                                            "hf" -> when (guideTab) {
-                                                0 -> "• ارائه‌دهنده: پایگاه مرجع هوش باز دنیا هاگینگ فیس (Hugging Face Hub)\n" +
-                                                     "• برترین مدل‌ها: LLaMA 3 (متا)، Qwen 2.5، Mistral\n" +
-                                                     "• مزیت رقابتی: دریچه دسترسی برخط به هزاران مدل متن‌باز آزاد محلی و تحقیقاتی معتبر سراسر دنیا بدون هیچ هزینه اضافی."
-                                                1 -> "۱) با مرورگر به هاب مرجع رسمی هوش باز دنیا به نشانی huggingface.co مراجعه فرمایید.\n" +
-                                                     "۲) گزینه 'Sign Up' را انتخاب نموده و اکانت رایگان بسازید."
-                                                2 -> "۱) با زدن دایره عکس پروفایل کاربری خود در بالا راست، وارد بخش اصلی تنظیمات یا 'Settings' شوید.\n" +
-                                                     "۲) از منوی کناری زبانه مستقل اکتیو 'Access Tokens' (huggingface.co/settings/tokens) را باز کنید.\n" +
-                                                     "۳) دکمه 'New Token' را زده، نامی بنویسید و فیلد دسترسی را حتماً روی حالت 'Read' تعریف کنید."
-                                                3 -> "هاگینگ‌فیس به شما اجازه می‌دهد به‌صورت نامحدود از اندپوینت اینفرنس سورس‌باز تستی استفاده بکنید که همواره ۱۰۰٪ رایگان و ماناست."
-                                                4 -> "کلید کپی شده را که نمونه الگویی آن با پیشوند اختصاصی 'hf_...' آغاز می‌شود را دریافت کرده و در باکس همنام Hugging Face الصاق نمایید."
-                                                else -> ""
-                                            }
-                                            else -> ""
                                         }
 
-                                        AlertDialog(
-                                            onDismissRequest = { showGuideForProvider = null },
-                                            confirmButton = {
-                                                TextButton(
-                                                    onClick = { showGuideForProvider = null },
-                                                    modifier = Modifier.testTag("guide_dialog_close")
-                                                ) {
-                                                    Text("متوجه شدم و بستن راهنما", style = Typography.bodyMedium, color = AccentGold, fontWeight = FontWeight.Bold)
-                                                }
-                                            },
-                                            title = {
+                                        // System Features Toggles
+                                        Text("مدیریت قابلیت‌های بومی دادرسی:", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(surfaceColor, RoundedCornerShape(12.dp))
+                                                .padding(16.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Switch(checked = isOcrEnabled, onCheckedChange = { isOcrEnabled = it })
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text("استخراج خودکار عکس اسناد (OCR)", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                Text("تبدیل هوشمند شواهد تصویری به لوایح متنی", style = Typography.labelSmall, color = onSurfaceColor)
+                                            }
+                                        }
+
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .background(surfaceColor, RoundedCornerShape(12.dp))
+                                                .padding(16.dp),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Switch(checked = isVoicePromptEnabled, onCheckedChange = { isVoicePromptEnabled = it })
+                                            Column(horizontalAlignment = Alignment.End) {
+                                                Text("فرمان‌دهی صوتی مستقل", style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                Text("کنترل فرآیند سه گامه‌ی لایحه با صدای فارسی کاربر", style = Typography.labelSmall, color = onSurfaceColor)
+                                            }
+                                        }
+
+                                        // Embedded API Key Config Panel (formerly in standalone APIs tab)
+                                        Card(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .border(1.dp, glassBorderColor, RoundedCornerShape(16.dp)),
+                                            colors = CardDefaults.cardColors(containerColor = surfaceColor)
+                                        ) {
+                                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                                 Row(
                                                     modifier = Modifier.fillMaxWidth(),
                                                     horizontalArrangement = Arrangement.SpaceBetween,
                                                     verticalAlignment = Alignment.CenterVertically
                                                 ) {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Info,
-                                                        contentDescription = null,
-                                                        tint = AccentGold,
-                                                        modifier = Modifier.size(24.dp)
-                                                    )
-                                                    Text(
-                                                        text = titleText,
-                                                        style = Typography.titleMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = AccentGold,
-                                                        textAlign = TextAlign.Right
-                                                    )
+                                                    Icon(Icons.Default.Lock, contentDescription = null, tint = AccentGold)
+                                                    Text("تنظیمات درگاه‌های امن سرور هوش مصنوعی", style = Typography.titleMedium, color = onBgColor, fontWeight = FontWeight.Bold)
                                                 }
-                                            },
-                                            text = {
-                                                Column(
-                                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                                                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                                                    horizontalAlignment = Alignment.End
-                                                ) {
-                                                    // Responsive Pill Selector for 5 Help Sections (RTL Scrollable Row)
-                                                    Row(
-                                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .horizontalScroll(rememberScrollState()),
-                                                        verticalAlignment = Alignment.CenterVertically
-                                                    ) {
-                                                        tabHeaders.asReversed().forEachIndexed { indexReversed, headerTitle ->
-                                                            val originalIndex = tabHeaders.size - 1 - indexReversed
-                                                            val isSelected = guideTab == originalIndex
-                                                            
-                                                            Box(
-                                                                modifier = Modifier
-                                                                    .clip(RoundedCornerShape(20.dp))
-                                                                    .background(if (isSelected) AccentGold else Color.White.copy(alpha = 0.05f))
-                                                                    .border(
-                                                                        width = 1.dp,
-                                                                        color = if (isSelected) AccentGold else Color.White.copy(alpha = 0.15f),
-                                                                        shape = RoundedCornerShape(20.dp)
-                                                                    )
-                                                                    .clickable { guideTab = originalIndex }
-                                                                    .padding(horizontal = 10.dp, vertical = 6.dp)
-                                                            ) {
-                                                                Text(
-                                                                    text = headerTitle,
-                                                                    color = if (isSelected) Color.Black else Color.White.copy(alpha = 0.8f),
-                                                                    style = Typography.labelSmall,
-                                                                    fontWeight = FontWeight.Bold
-                                                                )
-                                                            }
-                                                        }
-                                                    }
-
-                                                    Spacer(modifier = Modifier.height(4.dp))
-
-                                                    // Main tab content scrollable panel
+                                                Divider(color = glassBorderColor)
+                                                
+                                                if (apiKeysSavedSuccess) {
                                                     Card(
-                                                        modifier = Modifier
-                                                            .fillMaxWidth()
-                                                            .heightIn(max = 240.dp),
-                                                        colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.03f))
+                                                        colors = CardDefaults.cardColors(containerColor = Color(0x334CAF50)),
+                                                        modifier = Modifier.fillMaxWidth()
                                                     ) {
-                                                        Column(
-                                                            modifier = Modifier
-                                                                .fillMaxWidth()
-                                                                .verticalScroll(rememberScrollState())
-                                                                .padding(12.dp),
-                                                            verticalArrangement = Arrangement.Top,
-                                                            horizontalAlignment = Alignment.End
-                                                        ) {
-                                                            Text(
-                                                                text = contentText,
-                                                                style = Typography.bodyMedium,
-                                                                color = Color.White.copy(alpha = 0.95f),
-                                                                textAlign = TextAlign.Right,
-                                                                modifier = Modifier.fillMaxWidth()
-                                                            )
-                                                        }
+                                                        Text("کلیدهای امنیتی با موفقیت بروزرسانی و ذخیره شد.", color = Color.Green, style = Typography.bodyMedium, modifier = Modifier.padding(8.dp).fillMaxWidth(), textAlign = TextAlign.Center)
                                                     }
                                                 }
-                                            },
-                                            containerColor = Color(0xFF101B34),
-                                            shape = RoundedCornerShape(16.dp),
-                                            modifier = Modifier.border(1.dp, glassBorderColor, RoundedCornerShape(16.dp))
-                                        )
+
+                                                // Google Gemini key field style filling
+                                                ProviderApiSection(
+                                                    providerName = "Google AI Gemini",
+                                                    apiKeys = tempGeminiKeys,
+                                                    fieldsToShow = 1,
+                                                    revealedKeys = revealedKeys,
+                                                    onKeyChange = { index, value ->
+                                                        val newList = tempGeminiKeys.toMutableList()
+                                                        while (newList.size <= index) newList.add("")
+                                                        newList[index] = value
+                                                        tempGeminiKeys = newList
+                                                    },
+                                                    onShowGuide = { showGuideForProvider = "gemini" }
+                                                )
+
+                                                // OpenAI credentials
+                                                ProviderApiSection(
+                                                    providerName = "OpenAI GPT-4",
+                                                    apiKeys = tempOpenAiKeys,
+                                                    fieldsToShow = 1,
+                                                    revealedKeys = revealedKeys,
+                                                    onKeyChange = { index, value ->
+                                                        val newList = tempOpenAiKeys.toMutableList()
+                                                        while (newList.size <= index) newList.add("")
+                                                        newList[index] = value
+                                                        tempOpenAiKeys = newList
+                                                    },
+                                                    onShowGuide = { showGuideForProvider = "openai" }
+                                                )
+
+                                                Button(
+                                                    onClick = {
+                                                        adminViewModel.saveMultiApiKeys(
+                                                            gemini = tempGeminiKeys,
+                                                            openRouter = tempOpenRouterKeys,
+                                                            openAi = tempOpenAiKeys,
+                                                            groq = tempGroqKeys,
+                                                            cohere = tempCohereKeys,
+                                                            huggingFace = tempHuggingFaceKeys
+                                                        )
+                                                        apiKeysSavedSuccess = true
+                                                        scope.launch {
+                                                            kotlinx.coroutines.delay(3000)
+                                                            apiKeysSavedSuccess = false
+                                                        }
+                                                    },
+                                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                                    modifier = Modifier.fillMaxWidth()
+                                                ) {
+                                                    Text("ذخیره و همگام‌سازی توکن‌ها با پایگاه", color = Color.Black, fontWeight = FontWeight.Bold)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ====================================
+                //   GLOBAL MODALS & DIALOGS
+                // ====================================
+
+                // 1. LOADING PROCESS OVERLAY
+                if (isAnalysisWorking) {
+                    Dialog(onDismissRequest = {}) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF070D19)),
+                            border = BorderStroke(1.5.dp, AccentGold),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                CircularProgressIndicator(color = AccentGold)
+                                Text(text = analysisProgressText, color = Color.White, style = Typography.bodyMedium, textAlign = TextAlign.Center)
+                            }
+                        }
+                    }
+                }
+
+                // 2. DIALOG FOR VIEWING DETAILED PREVIOUS DOCUMENT (REOPEN LOGIC)
+                activeViewingCase?.let { c ->
+                    Dialog(onDismissRequest = { activeViewingCase = null }) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 600.dp),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1324)),
+                            border = BorderStroke(1.5.dp, AccentGold),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(14.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    IconButton(onClick = { activeViewingCase = null }) {
+                                        Icon(Icons.Default.Close, contentDescription = "بستن", tint = SoftCrimson)
+                                    }
+                                    Text(text = c.title, style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                                }
+
+                                Divider(color = glassBorderColor)
+
+                                // Main scrollable layout presenting standard RAG unified results and credentials
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .fillMaxWidth()
+                                        .verticalScroll(rememberScrollState()),
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    ProfileRow(title = "طبقه‌بندی لایحه", valText = c.type)
+                                    ProfileRow(title = "عنوان اتهام / موضوع سند", valText = c.legalPosition)
+                                    ProfileRow(title = "سطح اطمینان انطباق مدل", valText = "${c.confidenceScore}%")
+                                    ProfileRow(title = "آخرین تاریخ بازبینی", valText = c.date)
+
+                                    Divider(color = glassBorderColor.copy(alpha = 0.5f))
+
+                                    Text("شرح خواسته‌ها و پرونده استخراج شده:", style = Typography.titleSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                                    Text(text = c.description, style = Typography.bodyMedium, color = Color.White, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth())
+
+                                    Divider(color = glassBorderColor.copy(alpha = 0.5f))
+
+                                    c.suggestedEvidence.let { ev ->
+                                        if (ev.isNotBlank()) {
+                                            Text("ادله اثباتی و منضمات صادر شده:", style = Typography.titleSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                                            Text(text = ev, style = Typography.bodyMedium, color = Color.White, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth())
+                                            Divider(color = glassBorderColor.copy(alpha = 0.5f))
+                                        }
+                                    }
+
+                                    Text("متن نهایی لایحه اصلاحیه صادر شده (خروجی یکپارچه):", style = Typography.titleSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                                    Text(text = c.unifiedOutput, style = Typography.bodyMedium, color = Color.White, textAlign = TextAlign.Right, modifier = Modifier.fillMaxWidth())
+                                }
+
+                                Button(
+                                    onClick = {
+                                        copyToClipboard(context, "Unified Output", c.unifiedOutput)
+                                        Toast.makeText(context, "متن سند قضایی صادر و در حافظه کپی شد.", Toast.LENGTH_SHORT).show()
+                                    },
+                                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = null, tint = Color.Black)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("کپی متن لایحه یکپارچه به کلیپ‌برد", color = Color.Black, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 3. DIALOG FOR ADDING MATERIAL LAWS MANUALLY TO THE LOCAL REPOSITORY
+                if (showAddManualResourceDialog) {
+                    Dialog(onDismissRequest = { showAddManualResourceDialog = false }) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0C1324)),
+                            border = BorderStroke(1.5.dp, primaryColor),
+                            shape = RoundedCornerShape(16.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .fillMaxWidth()
+                                    .verticalScroll(rememberScrollState()),
+                                horizontalAlignment = Alignment.End,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text("ثبت دستی قانون جدید در مخزن محلی", style = Typography.titleMedium, color = AccentGold, fontWeight = FontWeight.Bold, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Right)
+                                
+                                OutlinedTextField(
+                                    value = repositoryManualTitle,
+                                    onValueChange = { repositoryManualTitle = it },
+                                    label = { Text("عنوان قانون (مثلا: ماده ۱۰ مدنی)", color = onSurfaceColor) },
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                OutlinedTextField(
+                                    value = repositoryManualContent,
+                                    onValueChange = { repositoryManualContent = it },
+                                    label = { Text("شرح متن و دامنه نفوذ فقهی قانون", color = onSurfaceColor) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    minLines = 3
+                                )
+
+                                // Category Dropdown
+                                var isCategoryMenuOpen by remember { mutableStateOf(false) }
+                                Box(modifier = Modifier.fillMaxWidth()) {
+                                    Button(
+                                        onClick = { isCategoryMenuOpen = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = surfaceColor),
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("دسته بندی: $repositoryManualCategory", color = onBgColor)
+                                    }
+                                    DropdownMenu(expanded = isCategoryMenuOpen, onDismissRequest = { isCategoryMenuOpen = false }) {
+                                        listOf("قانون مدنی", "قانون مجازات", "حقوق خانواده", "قوانین تجاری").forEach { type ->
+                                            DropdownMenuItem(text = { Text(type) }, onClick = {
+                                                repositoryManualCategory = type
+                                                isCategoryMenuOpen = false
+                                            })
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Button(
+                                        onClick = { showAddManualResourceDialog = false },
+                                        colors = ButtonDefaults.buttonColors(containerColor = Color.DarkGray),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("انصراف", color = Color.White)
+                                    }
+
+                                    Button(
+                                        onClick = {
+                                            if (repositoryManualTitle.isBlank() || repositoryManualContent.isBlank()) {
+                                                Toast.makeText(context, "لطفا تمام موارد را پر کنید", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                scope.launch {
+                                                    val entity = LegalResourceEntity(
+                                                        title = repositoryManualTitle,
+                                                        category = repositoryManualCategory,
+                                                        description = "ثبت دستی توسط کاربر",
+                                                        content = repositoryManualContent,
+                                                        articleNo = "ماده پیوست"
+                                                    )
+                                                    withContext(Dispatchers.IO) {
+                                                        db.resourceDao().insertResources(listOf(entity))
+                                                    }
+                                                    Toast.makeText(context, "قانون ثبت دستی شد و به پایگاه افزوده گردید.", Toast.LENGTH_SHORT).show()
+                                                    repositoryManualTitle = ""
+                                                    repositoryManualContent = ""
+                                                    showAddManualResourceDialog = false
+                                                }
+                                            }
+                                        },
+                                        colors = ButtonDefaults.buttonColors(containerColor = AccentGold),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text("ثبت سند", color = Color.Black, fontWeight = FontWeight.Bold)
                                     }
                                 }
                             }
@@ -1512,7 +1811,73 @@ fun CitizenDashboardScreen(
     }
 }
 
-// Case Card Item Component
+@Composable
+fun ProviderApiSection(
+    providerName: String,
+    apiKeys: List<String>,
+    fieldsToShow: Int,
+    revealedKeys: MutableMap<String, Boolean>,
+    onKeyChange: (Int, String) -> Unit,
+    onShowGuide: () -> Unit
+) {
+    val keyLabel = providerName.replace(" ", "_").lowercase()
+    val onBgColor = MaterialTheme.colorScheme.onBackground
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val onSurfaceColor = MaterialTheme.colorScheme.onSurface
+    val glassBorderColor = Color(0x33B18F54)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Button(
+                onClick = onShowGuide,
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGold.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(8.dp)
+            ) {
+                Text("راهنمای استعلام", color = AccentGold, style = Typography.labelSmall)
+            }
+            Text(text = providerName, style = Typography.bodyMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+        }
+
+        for (i in 0 until fieldsToShow) {
+            val keyString = apiKeys.getOrNull(i) ?: ""
+            val isRevealed = revealedKeys["$keyLabel-$i"] ?: false
+            
+            OutlinedTextField(
+                value = keyString,
+                onValueChange = { onKeyChange(i, it) },
+                label = { Text("توکن اختصاصی درگاه شماره ${i + 1}", color = onSurfaceColor) },
+                singleLine = true,
+                visualTransformation = if (isRevealed) VisualTransformation.None else PasswordVisualTransformation(),
+                trailingIcon = {
+                    IconButton(onClick = { revealedKeys["$keyLabel-$i"] = !isRevealed }) {
+                        Icon(
+                            imageVector = if (isRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                            contentDescription = "مشاهده یا پنهان سازی",
+                            tint = AccentGold
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = onBgColor,
+                    unfocusedTextColor = onBgColor,
+                    focusedBorderColor = AccentGold,
+                    unfocusedBorderColor = glassBorderColor
+                )
+            )
+        }
+    }
+}
+
 @Composable
 fun CaseCardItem(
     case: CaseEntity,
@@ -1566,7 +1931,6 @@ fun CaseCardItem(
     }
 }
 
-// Profile Row Component
 @Composable
 fun ProfileRow(title: String, valText: String) {
     Row(
@@ -1681,3 +2045,35 @@ fun CollapsibleNewRequestTab(
     }
 }
 
+// Global context file parsing helper
+private fun getFileName(context: android.content.Context, uri: Uri): String {
+    var result: String? = null
+    if (uri.scheme == "content") {
+        val cursor = context.contentResolver.query(uri, null, null, null, null)
+        try {
+            if (cursor != null && cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index != -1) {
+                    result = cursor.getString(index)
+                }
+            }
+        } finally {
+            cursor?.close()
+        }
+    }
+    if (result == null) {
+        result = uri.path
+        val cut = result?.lastIndexOf('/') ?: -1
+        if (cut != -1) {
+            result = result?.substring(cut + 1)
+        }
+    }
+    return result ?: "document.txt"
+}
+
+// Private helper to copy text to clipboard natively in Android
+private fun copyToClipboard(context: android.content.Context, label: String, text: String) {
+    val clipboardManager = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+    val clipData = android.content.ClipData.newPlainText(label, text)
+    clipboardManager.setPrimaryClip(clipData)
+}
