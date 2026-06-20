@@ -15,7 +15,7 @@ import org.json.JSONObject
 enum class UserRole(val label: String) {
     ADMIN("مدیر سیستم"),
     CITIZEN("کاربر عادی"),
-    LAWYER("وکیل (به‌زودی)"),
+    LAWYER("وکیل"),
     JUDGE("مقام قضایی (به‌زودی)")
 }
 
@@ -113,6 +113,17 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
             viewModelScope.launch {
                 logDao.insertLog(ActivityLogEntity(username = "محمدسعید خضریپور", action = "ورود شهروند تعیین شده به سیستم", date = getPersianDateNow()))
                 scalableDao.insertAuditLog(AuditLogEntity(user_id = 99, action_type = "CITIZEN_LOGIN", description = "ورود موفق شهروند پیش‌ساخته: محمدسعید خضریپور"))
+            }
+            return true
+        }
+
+        // 3.5. کاربر وکیل تعیین شده: حسین پورمحی‌آبادی / DrMahyabadi4770
+        if ((username == "حسین پورمحی آبادی" || username == "حسین پورمحی‌آبادی") && password == "DrMahyabadi4770") {
+            _session.value = UserSession("حسین پورمحی آبادی", UserRole.LAWYER, "lawyer-mahyabadi-token")
+            _isPasswordChangeRequired.value = false
+            viewModelScope.launch {
+                logDao.insertLog(ActivityLogEntity(username = "حسین پورمحی آبادی", action = "ورود وکیل برجسته به سیستم", date = getPersianDateNow()))
+                scalableDao.insertAuditLog(AuditLogEntity(user_id = 477, action_type = "LAWYER_LOGIN", description = "ورود موفق وکیل تعیین شده: دکتر حسین پورمحی آبادی"))
             }
             return true
         }

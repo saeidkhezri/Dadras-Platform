@@ -307,7 +307,7 @@ fun LoginScreen(
                                     .testTag("login_button")
                                     .shadow(6.dp, RoundedCornerShape(12.dp))
                                     .background(
-                                        brush = Brush.verticalGradient(
+                                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                                             colors = listOf(
                                                 primaryAccent.copy(alpha = 0.90f),
                                                 primaryAccent.copy(alpha = 0.70f)
@@ -317,7 +317,7 @@ fun LoginScreen(
                                     )
                                     .border(
                                         width = 1.2.dp,
-                                        brush = Brush.verticalGradient(
+                                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                                             colors = listOf(
                                                 Color.White.copy(alpha = 0.45f),
                                                 Color.White.copy(alpha = 0.05f)
@@ -371,7 +371,7 @@ fun LoginScreen(
                                     .testTag("google_login_button")
                                     .shadow(4.dp, RoundedCornerShape(12.dp))
                                     .background(
-                                        brush = Brush.verticalGradient(
+                                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                                             colors = listOf(
                                                 Color.White.copy(alpha = 0.15f),
                                                 Color.White.copy(alpha = 0.04f)
@@ -381,7 +381,7 @@ fun LoginScreen(
                                     )
                                     .border(
                                         width = 1.2.dp,
-                                        brush = Brush.verticalGradient(
+                                        brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                                             colors = listOf(
                                                 Color.White.copy(alpha = 0.35f),
                                                 Color.White.copy(alpha = 0.08f)
@@ -509,7 +509,7 @@ fun LoginScreen(
                 ) {
                     listOf(
                         Triple("مقام قضایی", "به‌زودی", Icons.Default.AccountBalance),
-                        Triple("وکیل", "به‌زودی", Icons.Default.BusinessCenter),
+                        Triple("وکیل", "فعال", Icons.Default.BusinessCenter),
                         Triple("کاربر عادی", "فعال", Icons.Default.Person),
                         Triple("مدیر سیستم", "فعال", Icons.Default.Settings)
                     ).forEach { roleTriple ->
@@ -530,7 +530,7 @@ fun LoginScreen(
                                 .weight(1f)
                                 .shadow(4.dp, RoundedCornerShape(12.dp))
                                 .background(
-                                    brush = Brush.verticalGradient(
+                                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                                         colors = listOf(
                                             roleColor.copy(alpha = if (isEnabled) 0.35f else 0.12f),
                                             roleColor.copy(alpha = if (isEnabled) 0.15f else 0.04f)
@@ -540,7 +540,7 @@ fun LoginScreen(
                                 )
                                 .border(
                                     width = 1.2.dp,
-                                    brush = Brush.verticalGradient(
+                                    brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                                         colors = listOf(
                                             roleColor.copy(alpha = if (isEnabled) 0.65f else 0.25f),
                                             roleColor.copy(alpha = if (isEnabled) 0.25f else 0.08f)

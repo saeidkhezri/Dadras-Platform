@@ -91,6 +91,10 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate("admin_panel") {
                                                 popUpTo("login") { inclusive = true }
                                             }
+                                        } else if (activeRole == UserRole.LAWYER) {
+                                            navController.navigate("lawyer_panel") {
+                                                popUpTo("login") { inclusive = true }
+                                            }
                                         } else {
                                             navController.navigate("dashboard") {
                                                 popUpTo("login") { inclusive = true }
@@ -160,6 +164,15 @@ class MainActivity : ComponentActivity() {
                                 AdminPanelScreen(
                                     authViewModel = authViewModel,
                                     adminViewModel = adminViewModel,
+                                    onNavigateBack = { authViewModel.logout() }
+                                )
+                            }
+
+                            // ۷. پیشخوان اختصاصی وکلای دادگستری
+                            composable("lawyer_panel") {
+                                currentScreenName = "پیشخوان فوق تخصصی وکلای دادگستری"
+                                LawyerPanelScreen(
+                                    authViewModel = authViewModel,
                                     onNavigateBack = { authViewModel.logout() }
                                 )
                             }
