@@ -100,12 +100,26 @@ fun LibraryScreen(
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
-                        Text(
-                            text = "بایگانی متمرکز و مراجع قوانین مدون",
-                            style = Typography.titleLarge,
-                            color = AccentGold,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.img_app_icon_1782545555023),
+                                contentDescription = "Logo",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .border(1.dp, AccentGold.copy(alpha = 0.5f), androidx.compose.foundation.shape.CircleShape)
+                            )
+                            Text(
+                                text = "بایگانی متمرکز و مراجع قوانین مدون",
+                                style = Typography.titleLarge,
+                                color = AccentGold,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = onNavigateBack) {

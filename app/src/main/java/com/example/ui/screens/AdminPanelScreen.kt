@@ -6,6 +6,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.window.Dialog
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,8 +31,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.*
-import com.example.ui.components.FrostedGlassBackground
-import com.example.ui.components.PersianFirstUtils
+import com.example.ui.components.*
 import com.example.viewmodel.AdminViewModel
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.OfficialSourceDetails
@@ -201,12 +201,26 @@ fun AdminPanelScreen(
             topBar = {
                 CenterAlignedTopAppBar(
                     title = {
-                        Text(
-                            text = "پیشخوان مدیریت کل سامانه",
-                            style = Typography.titleLarge,
-                            color = AccentGold,
-                            fontWeight = FontWeight.Bold
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            androidx.compose.foundation.Image(
+                                painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.img_app_icon_1782545555023),
+                                contentDescription = "Logo",
+                                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .border(1.dp, AccentGold.copy(alpha = 0.5f), CircleShape)
+                            )
+                            Text(
+                                text = "پیشخوان مدیریت کل سامانه",
+                                style = Typography.titleLarge,
+                                color = AccentGold,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     },
                     navigationIcon = {
                         IconButton(onClick = { authViewModel.logout() }) {
@@ -1257,6 +1271,7 @@ fun AdminPanelScreen(
                         val curGroqKeys by adminViewModel.groqApiKeys.collectAsState()
                         val curCohereKeys by adminViewModel.cohereApiKeys.collectAsState()
                         val curHuggingFaceKeys by adminViewModel.huggingfaceApiKeys.collectAsState()
+                        val curYouComKeys by adminViewModel.youcomApiKeys.collectAsState()
                         val curGeminiProxyUrl by adminViewModel.geminiProxyUrl.collectAsState()
 
                         var tempGeminiKeys by remember(curGeminiKeys) { mutableStateOf(curGeminiKeys.ifEmpty { listOf("") }) }
@@ -1265,7 +1280,54 @@ fun AdminPanelScreen(
                         var tempGroqKeys by remember(curGroqKeys) { mutableStateOf(curGroqKeys.ifEmpty { listOf("") }) }
                         var tempCohereKeys by remember(curCohereKeys) { mutableStateOf(curCohereKeys.ifEmpty { listOf("") }) }
                         var tempHuggingFaceKeys by remember(curHuggingFaceKeys) { mutableStateOf(curHuggingFaceKeys.ifEmpty { listOf("") }) }
+                        var tempYouComKeys by remember(curYouComKeys) { mutableStateOf(curYouComKeys.ifEmpty { listOf("") }) }
                         var tempGeminiProxyUrl by remember(curGeminiProxyUrl) { mutableStateOf(curGeminiProxyUrl) }
+
+                        var importedFileContent by remember { mutableStateOf("") }
+                        var showWizardDialog by remember { mutableStateOf(false) }
+                        var showHealthDashboard by remember { mutableStateOf(false) }
+
+                        if (showHealthDashboard) {
+                            ApiKeyHealthDashboardDialog(
+                                adminViewModel = adminViewModel,
+                                onDismiss = { showHealthDashboard = false }
+                            )
+                        }
+
+                        if (showWizardDialog) {
+                            ApiKeyImportWizardDialog(
+                                fileContent = importedFileContent,
+                                onDismiss = { showWizardDialog = false },
+                                onConfirmSave = { gemini, openRouter, openAi, groq, cohere, huggingFace, youcom ->
+                                    val gList = (gemini + listOf("", "", "")).take(3)
+                                    val orList = (openRouter + listOf("", "", "")).take(3)
+                                    val oaList = (openAi + listOf("", "", "")).take(3)
+                                    val grList = (groq + listOf("", "", "")).take(3)
+                                    val coList = (cohere + listOf("", "", "")).take(3)
+                                    val hfList = (huggingFace + listOf("", "", "")).take(3)
+                                    val ycList = (youcom + listOf("", "", "")).take(3)
+                                    
+                                    adminViewModel.saveMultiApiKeys(
+                                        gemini = gList,
+                                        openRouter = orList,
+                                        openAi = oaList,
+                                        groq = grList,
+                                        cohere = coList,
+                                        huggingFace = hfList,
+                                        youcom = ycList,
+                                        proxyUrl = tempGeminiProxyUrl
+                                    )
+                                    tempGeminiKeys = gList
+                                    tempOpenRouterKeys = orList
+                                    tempOpenAiKeys = oaList
+                                    tempGroqKeys = grList
+                                    tempCohereKeys = coList
+                                    tempHuggingFaceKeys = hfList
+                                    tempYouComKeys = ycList
+                                    showWizardDialog = false
+                                }
+                            )
+                        }
 
                         Column(
                             modifier = Modifier
@@ -1367,7 +1429,7 @@ fun AdminPanelScreen(
 
                             // انتخاب وب‌سرویس هوش مصنوعی (AI Providers)
                             Text(text = "انتخاب مدل اصلی تحلیل لایحه:", style = Typography.titleMedium, color = AccentGold)
-                            listOf("Gemini 3.5 Flash", "DeepSeek Llama 3", "GPT-4o Enterprise", "Claude 3.5 Sonnet").forEach { modelOption ->
+                            listOf("Gemini 3.5 Flash", "DeepSeek Llama 3", "GPT-4o Enterprise", "Claude 3.5 Sonnet", "You.com AI (رایگان)").forEach { modelOption ->
                                 val isSelected = aiProvider == modelOption
                                 Box(
                                     modifier = Modifier
@@ -1422,6 +1484,30 @@ fun AdminPanelScreen(
                                     )
                                     Divider(color = GlassBorderLight)
 
+                                    ApiKeyFileImportTrigger(
+                                        onFileContentReady = { content ->
+                                            importedFileContent = content
+                                            showWizardDialog = true
+                                        }
+                                    )
+
+                                    Button(
+                                        onClick = { showHealthDashboard = true },
+                                        colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
+                                        shape = RoundedCornerShape(12.dp),
+                                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                                    ) {
+                                        Row(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Default.HealthAndSafety, contentDescription = null, tint = Color.White)
+                                            Text("سامانه آنلاین پایش سلامت و سهمیه درگاه‌های هوش (چراغ LED)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
                                     // 1. Google Gemini API Keys
                                     ApiKeyServiceSection(
                                         title = "کلیدهای اختصاصی Google Gemini API (تا ۳ کلید با اولویت بالا به پایین):",
@@ -1429,10 +1515,7 @@ fun AdminPanelScreen(
                                         onOpenGuide = { activeGuideInfo = geminiGuide },
                                         keys = tempGeminiKeys,
                                         onKeysChange = { tempGeminiKeys = it },
-                                        placeholderPrefix = "کلید جمینای",
-                                        onTestKey = { key, onResult ->
-                                            testKeyConnection("Gemini", key, onResult)
-                                        }
+                                        placeholderPrefix = "کلید جمینای"
                                     )
 
                                     Spacer(modifier = Modifier.height(6.dp))
@@ -1461,10 +1544,7 @@ fun AdminPanelScreen(
                                         onOpenGuide = { activeGuideInfo = openRouterGuide },
                                         keys = tempOpenRouterKeys,
                                         onKeysChange = { tempOpenRouterKeys = it },
-                                        placeholderPrefix = "کلید اپن‌روتر",
-                                        onTestKey = { key, onResult ->
-                                            testKeyConnection("OpenRouter", key, onResult)
-                                        }
+                                        placeholderPrefix = "کلید اپن‌روتر"
                                     )
 
                                     Divider(color = GlassBorderLight.copy(alpha = 0.5f))
@@ -1476,10 +1556,7 @@ fun AdminPanelScreen(
                                         onOpenGuide = { activeGuideInfo = openAiGuide },
                                         keys = tempOpenAiKeys,
                                         onKeysChange = { tempOpenAiKeys = it },
-                                        placeholderPrefix = "کلید اپن‌ای‌آی",
-                                        onTestKey = { key, onResult ->
-                                            testKeyConnection("OpenAI", key, onResult)
-                                        }
+                                        placeholderPrefix = "کلید اپن‌ای‌آی"
                                     )
 
                                     Divider(color = GlassBorderLight.copy(alpha = 0.5f))
@@ -1491,10 +1568,7 @@ fun AdminPanelScreen(
                                         onOpenGuide = { activeGuideInfo = groqGuide },
                                         keys = tempGroqKeys,
                                         onKeysChange = { tempGroqKeys = it },
-                                        placeholderPrefix = "کلید گراک",
-                                        onTestKey = { key, onResult ->
-                                            testKeyConnection("Groq", key, onResult)
-                                        }
+                                        placeholderPrefix = "کلید گراک"
                                     )
 
                                     Divider(color = GlassBorderLight.copy(alpha = 0.5f))
@@ -1506,10 +1580,7 @@ fun AdminPanelScreen(
                                         onOpenGuide = { activeGuideInfo = cohereGuide },
                                         keys = tempCohereKeys,
                                         onKeysChange = { tempCohereKeys = it },
-                                        placeholderPrefix = "کلید کوهر",
-                                        onTestKey = { key, onResult ->
-                                            testKeyConnection("Cohere", key, onResult)
-                                        }
+                                        placeholderPrefix = "کلید کوهر"
                                     )
 
                                     Divider(color = GlassBorderLight.copy(alpha = 0.5f))
@@ -1521,10 +1592,19 @@ fun AdminPanelScreen(
                                         onOpenGuide = { activeGuideInfo = huggingFaceGuide },
                                         keys = tempHuggingFaceKeys,
                                         onKeysChange = { tempHuggingFaceKeys = it },
-                                        placeholderPrefix = "کلید هاگینگ‌فیس",
-                                        onTestKey = { key, onResult ->
-                                            testKeyConnection("HuggingFace", key, onResult)
-                                        }
+                                        placeholderPrefix = "کلید هاگینگ‌فیس"
+                                    )
+
+                                    Divider(color = GlassBorderLight.copy(alpha = 0.5f))
+
+                                    // 7. YouCom Access Tokens
+                                    ApiKeyServiceSection(
+                                        title = "کلیدهای اختصاصی You.com API (تا ۳ کلید با اولویت بالا به پایین):",
+                                        guideTitle = "راهنمای اتصال You.com",
+                                        onOpenGuide = { activeGuideInfo = youcomGuide },
+                                        keys = tempYouComKeys,
+                                        onKeysChange = { tempYouComKeys = it },
+                                        placeholderPrefix = "کلید یوکام"
                                     )
 
                                     Spacer(modifier = Modifier.height(12.dp))
@@ -1540,6 +1620,7 @@ fun AdminPanelScreen(
                                                 groq = tempGroqKeys,
                                                 cohere = tempCohereKeys,
                                                 huggingFace = tempHuggingFaceKeys,
+                                                youcom = tempYouComKeys,
                                                 proxyUrl = tempGeminiProxyUrl
                                             )
                                             showSuccessLabel = true
@@ -1839,334 +1920,3 @@ fun AdminStatCard(
     }
 }
 
-// Interactive API Connection Guides and helpers requested by user
-data class ApiGuideInfo(
-    val title: String,
-    val description: String,
-    val regSteps: List<String>,
-    val apiSteps: List<String>,
-    val manageSteps: List<String>,
-    val freeTier: String,
-    val limits: String,
-    val linkUrl: String,
-    val linkLabel: String
-)
-
-val geminiGuide = ApiGuideInfo(
-    title = "راهنمای اتصال گوگل جمینای (Google Gemini)",
-    description = "سرویس هوش مصنوعی شرکت گوگل با مدل‌های سریع و قدرتمند جمینای که امکان دسترسی رایگان به کلیدهای API را نیز در اختیار برنامه‌نویسان قرار می‌دهد.",
-    regSteps = listOf(
-        "۱. ابتدا وارد سایت Google AI Studio شوید.",
-        "۲. با حساب کاربری گوگل (GMAIL) خود ثبت‌نام کنید.",
-        "۳. شرایط قوانین استفاده از هوش مصنوعی گوگل را تایید کنید."
-    ),
-    apiSteps = listOf(
-        "۱. بر روی دکمه Get API Key کلیک کنید.",
-        "۲. گزینه Create API Key را بفشارید.",
-        "۳. یک پروژه موجود یا جدید را انتخاب کرده و کلید خود را کپی کنید."
-    ),
-    manageSteps = listOf(
-        "شما همیشه می‌توانید کلیدهای خود را در پنل کاربری گوگل AI Studio مدیریت کنید."
-    ),
-    freeTier = "تا ۱۵ درخواست در دقیقه (RPM) به صورت کاملاً رایگان در مدل Gemini 1.5 Flash",
-    limits = "نیازمند ابزار عبور از تحریم (پروکسی ممیزی شده) در صورت بسته بودن ارتباط مستقیم",
-    linkUrl = "https://aistudio.google.com/app/apikey",
-    linkLabel = "دریافت کلید رسمی Gemini"
-)
-
-val openRouterGuide = ApiGuideInfo(
-    title = "راهنمای اتصال اپن‌روتر (OpenRouter)",
-    description = "یک درگاه تجمیع‌کننده واسط پیشرفته که صدها مدل متنوع هوش مصنوعی (مانند DeepSeek, Llama 3, GPT, Claude) را با یک کلید واحد در اختیار شما می‌گذارد.",
-    regSteps = listOf(
-        "۱. وارد وب‌سایت openrouter.ai شوید.",
-        "۲. با ایمیل یا کیف پول اکانت خود را ایجاد کنید."
-    ),
-    apiSteps = listOf(
-        "۱. به بخش Keys در داشبورد خود بروید.",
-        "۲. دکمه Create Key را بزنید.",
-        "۳. نام کلید را مشخص کرده و کلید تولید شده را ذخیره نمایید."
-    ),
-    manageSteps = listOf(
-        "تراکنش‌ها، شارژ حساب کاربری و لیست کلیدها کاملاً در بخش Settings/Keys مدیریت می‌شوند."
-    ),
-    freeTier = "دارای چندین مدل هوش مصنوعی کاملاً رایگان از جمله DeepSeek Llama 3 و Mistral",
-    limits = "ندارد (بدون نیاز به تحریم شکن از سرورهای ما)",
-    linkUrl = "https://openrouter.ai/keys",
-    linkLabel = "دریافت کلید OpenRouter"
-)
-
-val openAiGuide = ApiGuideInfo(
-    title = "راهنمای اتصال اپن‌ای‌آی (OpenAI)",
-    description = "توسعه‌دهنده مدل‌های پیشگام هوش مصنوعی از جمله سری GPT-4o و GPT-4.",
-    regSteps = listOf(
-        "۱. وارد پلتفرم رسمی platform.openai.com شوید.",
-        "۲. حساب کاربری جدید ایجاد کنید و ترجیحاً شماره تلفن معتبری ثبت کنید."
-    ),
-    apiSteps = listOf(
-        "۱. وارد منوی API Keys از داشبورد چپ شوید.",
-        "۲. دکمه Create new secret key را کلیک کنید.",
-        "۳. نام و دسترسی‌ها را تایید کرده و کلید sk-proj را کپی کنید."
-    ),
-    manageSteps = listOf(
-        "میزان مصرف و پایش کلیدها در منوی Usage و API Keys در پلتفرم قابل دسترسی است."
-    ),
-    freeTier = "مقداری اعتبار هدیه محدود برای حساب‌های جدید",
-    limits = "نیاز به پرداخت ارزی مجزا برای استفاده طولانی مدت در مدل‌های حرفه‌ای",
-    linkUrl = "https://platform.openai.com/api-keys",
-    linkLabel = "دریافت کلید OpenAI"
-)
-
-val groqGuide = ApiGuideInfo(
-    title = "راهنمای اتصال گراک (Groq Cloud)",
-    description = "یکی از سریع‌ترین موتورهای استنتاج سخت‌افزاری دنیا با پشتیبانی عالی و رایگان از مدل‌های لاما به شدت پرسرعت.",
-    regSteps = listOf(
-        "۱. وارد پرتال Groq Console شوید.",
-        "۲. با اکانت گوگل یا ایمیل خود ثبت‌نام کنید."
-    ),
-    apiSteps = listOf(
-        "۱. در منوی سمت چپ به بخش API Keys بروید.",
-        "۲. دکمه Create API Key را انتخاب کنید.",
-        "۳. کلید gsk- را رونوشت نمایید."
-    ),
-    manageSteps = listOf(
-        "مشاهده آمار فراخوانی در قسمت Usage داشبورد امکان‌پذیر است."
-    ),
-    freeTier = "بسیار سخاوتمندانه و با سرعت باورنکردنی (رایگان با محدودیت نرخ معقول)",
-    limits = "سرعت بالا اما صرفاً برای مدل‌های متن‌باز مثل لاما",
-    linkUrl = "https://console.groq.com/keys",
-    linkLabel = "دریافت کلید Groq"
-)
-
-val cohereGuide = ApiGuideInfo(
-    title = "راهنمای اتصال کوهر (Cohere AI)",
-    description = "سرویس ویژه متمرکز بر ساختار متون سازمانی و تولید اسناد حقوقی با مدل موفق Command-R.",
-    regSteps = listOf(
-        "۱. به پرتال توسعه‌دهندگان cohere.com بروید.",
-        "۲. ثبت نام خود را نهایی کنید."
-    ),
-    apiSteps = listOf(
-        "۱. از منوی اصلی داشبورد به بخش API Keys وارد شوید.",
-        "۲. کلید تستی یا تجاری دریافت کنید."
-    ),
-    manageSteps = listOf(
-        "مدیریت درگاه پرداخت و سقف بودجه از زبانه Billing."
-    ),
-    freeTier = "استفاده رایگان در حالت تستی و برنامه‌نویسی غیرتجاری",
-    limits = "سرعت محدود در لایسنس رایگان",
-    linkUrl = "https://dashboard.cohere.com/api-keys",
-    linkLabel = "دریافت کلید Cohere"
-)
-
-val huggingFaceGuide = ApiGuideInfo(
-    title = "راهنمای اتصال هاگینگ فیس (Hugging Face)",
-    description = "بزرگترین مخزن مدل‌های هوش مصنوعی دنیا با امکان اجرای رایگان هزاران مدل متن باز.",
-    regSteps = listOf(
-        "۱. وارد huggingface.co شوید.",
-        "۲. حساب کاربری بسازید."
-    ),
-    apiSteps = listOf(
-        "۱. به بخش Settings و سپس Access Tokens کاربری خود بروید.",
-        "۲. روی Create new token کلیک کنید.",
-        "۳. نوع توکن را Read مشخص کرده و کلید hf_ را بردارید."
-    ),
-    manageSteps = listOf(
-        "مدیریت کلیدها و دسترسی‌ها از طریق صفحه تنظیمات توکن‌ها."
-    ),
-    freeTier = "رایگان برای فراخوانی مدل‌های عمومی",
-    limits = "محدودیت سرعت پردازش در سرورهای اشتراکی بدون هاست اختصاصی",
-    linkUrl = "https://huggingface.co/settings/tokens",
-    linkLabel = "دریافت توکن Hugging Face"
-)
-
-fun testKeyConnection(provider: String, key: String, onResult: (String) -> Unit) {
-    if (key.isBlank()) {
-        onResult("خطا: ابتدا کلید را تکمیل کنید")
-        return
-    }
-    if (key.length < 15) {
-        onResult("خطا: فرمت کلید کوتاه یا نامعتبر تلقی شد")
-        return
-    }
-    onResult("اتصال آزمایشی با موفقیت به سرورهای $provider برقرار شد.")
-}
-
-@Composable
-fun ApiKeyServiceSection(
-    title: String,
-    guideTitle: String,
-    onOpenGuide: () -> Unit,
-    keys: List<String>,
-    onKeysChange: (List<String>) -> Unit,
-    placeholderPrefix: String,
-    onTestKey: (String, (String) -> Unit) -> Unit
-) {
-    var visualTransfMap by remember { mutableStateOf(mapOf<Int, Boolean>()) }
-    var testResultMap by remember { mutableStateOf(mapOf<Int, String>()) }
-    var testLoadingMap by remember { mutableStateOf(mapOf<Int, Boolean>()) }
-    val coroutineScope = rememberCoroutineScope()
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 8.dp),
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Guide Button
-            Text(
-                text = guideTitle,
-                style = Typography.labelMedium,
-                color = AccentGold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .clickable { onOpenGuide() }
-                    .background(AccentGold.copy(alpha = 0.15f))
-                    .padding(horizontal = 8.dp, vertical = 6.dp)
-            )
-            
-            Text(
-                text = title,
-                style = Typography.bodyMedium,
-                color = TextPrimaryFarsi,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Right
-            )
-        }
-
-        // Key Input Fields with Delete/Visibility/Test options
-        keys.forEachIndexed { i, key ->
-            val isVisible = visualTransfMap[i] ?: false
-            val testResult = testResultMap[i] ?: ""
-            val isLoading = testLoadingMap[i] ?: false
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.End
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Left Actions: Test Conn and Trash Icon
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        if (keys.size > 1) {
-                            IconButton(
-                                onClick = {
-                                    val updated = keys.toMutableList()
-                                    updated.removeAt(i)
-                                    onKeysChange(updated)
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "حذف کلید",
-                                    tint = CoralRedDark,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        IconButton(
-                            onClick = {
-                                testLoadingMap = testLoadingMap + (i to true)
-                                testResultMap = testResultMap + (i to "درحال تلاش...")
-                                coroutineScope.launch {
-                                    kotlinx.coroutines.delay(1000)
-                                    onTestKey(key) { msg ->
-                                        testResultMap = testResultMap + (i to msg)
-                                        testLoadingMap = testLoadingMap + (i to false)
-                                    }
-                                }
-                            }
-                        ) {
-                            if (isLoading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    strokeWidth = 2.dp,
-                                    color = AccentGold
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.Check,
-                                    contentDescription = "تست اتصال",
-                                    tint = SoftEmerald,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-                    }
-
-                    // Key input OutlinedTextField RTL
-                    OutlinedTextField(
-                        value = key,
-                        onValueChange = { newVal ->
-                            val updated = keys.toMutableList()
-                            updated[i] = newVal
-                            onKeysChange(updated)
-                        },
-                        placeholder = { Text("$placeholderPrefix شماره ${PersianFirstUtils.formatDigits((i + 1).toString(), true)}", color = TextSecondaryFarsi) },
-                        singleLine = true,
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        visualTransformation = if (isVisible) androidx.compose.ui.text.input.VisualTransformation.None else androidx.compose.ui.text.input.PasswordVisualTransformation(),
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                visualTransfMap = visualTransfMap + (i to !isVisible)
-                            }) {
-                                Icon(
-                                    imageVector = if (isVisible) Icons.Filled.Visibility else Icons.Filled.VisibilityOff,
-                                    contentDescription = if (isVisible) "مخفی کردن" else "نمایش",
-                                    tint = TextSecondaryFarsi
-                                )
-                            }
-                        },
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
-                            focusedBorderColor = AccentGold,
-                            unfocusedBorderColor = GlassBorderLight
-                        )
-                    )
-                }
-
-                if (testResult.isNotEmpty()) {
-                    Text(
-                        text = testResult,
-                        style = Typography.labelSmall,
-                        color = if (testResult.startsWith("خطا")) CoralRedDark else SoftEmerald,
-                        modifier = Modifier.padding(top = 2.dp, end = 8.dp),
-                        textAlign = TextAlign.Right
-                    )
-                }
-            }
-        }
-
-        // Add Button below
-        if (keys.size < 3) {
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable {
-                        val updated = keys.toMutableList() + ""
-                        onKeysChange(updated)
-                    }
-                    .background(SoftEmerald.copy(alpha = 0.15f))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "افزودن", tint = SoftEmerald, modifier = Modifier.size(16.dp))
-                Text("افزودن فیلد کلید جدید", style = Typography.labelSmall, color = SoftEmerald, fontWeight = FontWeight.Bold)
-            }
-        }
-    }
-}

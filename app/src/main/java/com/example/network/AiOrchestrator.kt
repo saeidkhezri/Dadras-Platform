@@ -107,12 +107,14 @@ object AiOrchestrator {
     var groqKeysList: List<String> = emptyList()
     var cohereKeysList: List<String> = emptyList()
     var huggingfaceKeysList: List<String> = emptyList()
+    var youcomKeysList: List<String> = emptyList()
 
     var openRouterBaseUrl: String = "https://openrouter.ai/"
     var openAiBaseUrl: String = "https://api.openai.com/"
     var groqBaseUrl: String = "https://api.groq.com/"
     var cohereBaseUrl: String = "https://api.cohere.com/"
     var huggingFaceBaseUrl: String = "https://api-inference.huggingface.co/"
+    var youcomBaseUrl: String = "https://api.you.com/"
 
     // تمام کلیدهای سخت‌کد از کل سورس برنامه‌نویسی مستقل حذف شدند
     private val OBFUSCATED_OPENROUTER_KEYS = emptyList<String>()
@@ -128,7 +130,8 @@ object AiOrchestrator {
             ModelInfo("Gemini 1.5 Pro", "OpenRouter", "Tier 4 - optional", "Active", 8, 9, 9, 99, "هم‌اکنون"),
             ModelInfo("Groq LLaMA-3 (رایگان)", "Groq", "Tier 2 - speed", "Active", 10, 10, 8, 99, "هم‌اکنون"),
             ModelInfo("Cohere Command-R (رایگان)", "Cohere", "Tier 2 - multilingual", "Active", 9, 8, 9, 98, "هم‌اکنون"),
-            ModelInfo("HF LLaMA-3 (رایگان)", "HuggingFace", "Tier 3 - open-source", "Active", 10, 7, 8, 95, "هم‌اکنون")
+            ModelInfo("HF LLaMA-3 (رایگان)", "HuggingFace", "Tier 3 - open-source", "Active", 10, 7, 8, 95, "هم‌اکنون"),
+            ModelInfo("YOU.COM AI (رایگان)", "YouCom", "Tier 2 - real-time search", "Active", 10, 9, 9, 99, "هم‌اکنون")
         )
     )
     val models = _models.asStateFlow()
@@ -203,6 +206,10 @@ object AiOrchestrator {
         val hf2 = prefs.getString("huggingface_key_2", "") ?: ""
         val hf3 = prefs.getString("huggingface_key_3", "") ?: ""
         
+        val yc1 = prefs.getString("youcom_key_1", "") ?: ""
+        val yc2 = prefs.getString("youcom_key_2", "") ?: ""
+        val yc3 = prefs.getString("youcom_key_3", "") ?: ""
+        
         adminGeminiKey = g1.ifBlank { g2.ifBlank { g3 } }
         adminOpenAiKey = o1.ifBlank { o2.ifBlank { o3 } }
         adminOpenRouterKey = or1.ifBlank { or2.ifBlank { or3 } }
@@ -213,12 +220,14 @@ object AiOrchestrator {
         groqKeysList = listOf(gr1, gr2, gr3).filter { it.isNotBlank() }
         cohereKeysList = listOf(co1, co2, co3).filter { it.isNotBlank() }
         huggingfaceKeysList = listOf(hf1, hf2, hf3).filter { it.isNotBlank() }
+        youcomKeysList = listOf(yc1, yc2, yc3).filter { it.isNotBlank() }
         
         openRouterBaseUrl = prefs.getString("openrouter_proxy_url", "https://openrouter.ai/") ?: "https://openrouter.ai/"
         openAiBaseUrl = prefs.getString("openai_proxy_url", "https://api.openai.com/") ?: "https://api.openai.com/"
         groqBaseUrl = prefs.getString("groq_proxy_url", "https://api.groq.com/") ?: "https://api.groq.com/"
         cohereBaseUrl = prefs.getString("cohere_proxy_url", "https://api.cohere.com/") ?: "https://api.cohere.com/"
         huggingFaceBaseUrl = prefs.getString("huggingface_proxy_url", "https://api-inference.huggingface.co/") ?: "https://api-inference.huggingface.co/"
+        youcomBaseUrl = prefs.getString("youcom_proxy_url", "https://api.you.com/") ?: "https://api.you.com/"
         
         logAuditEvent("SYSTEM_KEYS_LOADED", "کلیدهای ارائه‌دهندگان هوش مصنوعی با موفقیت از حافظه ماندگار بازیابی و بارگذاری شدند.")
     }
@@ -503,6 +512,48 @@ object AiOrchestrator {
         }
     }
 
+    private suspend fun callYouComEndpoint(apiKey: String, prompt: String, systemInstruction: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+        val mediaType = "application/json; charset=utf-8".toMediaType()
+        val messagesArray = org.json.JSONArray()
+        if (systemInstruction != null && systemInstruction.isNotEmpty()) {
+            messagesArray.put(org.json.JSONObject().apply {
+                put("role", "system")
+                put("content", systemInstruction)
+            })
+        }
+        messagesArray.put(org.json.JSONObject().apply {
+            put("role", "user")
+            put("content", prompt)
+        })
+
+        val jsonBody = org.json.JSONObject().apply {
+            put("model", "youchat")
+            put("messages", messagesArray)
+            put("temperature", 0.3)
+        }
+
+        val baseUrl = youcomBaseUrl.trim().removeSuffix("/")
+        val finalUrl = "$baseUrl/v1/chat/completions"
+        val request = okhttp3.Request.Builder()
+            .url(finalUrl)
+            .post(jsonBody.toString().toRequestBody(mediaType))
+            .addHeader("X-AI-Provider", "youcom")
+            .addHeader("Authorization", "Bearer $apiKey")
+            .addHeader("Content-Type", "application/json")
+            .build()
+
+        client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) throw Exception("کد خطای یوکام: ${response.code} ${response.message}")
+            val bodyString = response.body?.string() ?: throw Exception("پاسخ یوکام تهی است")
+            val jsonResponse = org.json.JSONObject(bodyString)
+            val choices = jsonResponse.getJSONArray("choices")
+            if (choices.length() > 0) {
+                return@withContext choices.getJSONObject(0).getJSONObject("message").getString("content")
+            }
+            throw Exception("عدم امکان استخراج فیلد پاسخ یوکام")
+        }
+    }
+
     private suspend fun callHuggingFaceEndpoint(apiKey: String, prompt: String, systemInstruction: String?): String = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
         val mediaType = "application/json; charset=utf-8".toMediaType()
         
@@ -571,6 +622,7 @@ object AiOrchestrator {
         val grKeys = groqKeysList.filter { it.isNotBlank() }
         val coKeys = cohereKeysList.filter { it.isNotBlank() }
         val hfKeys = huggingfaceKeysList.filter { it.isNotBlank() }
+        val ycKeys = youcomKeysList.filter { it.isNotBlank() }
 
         // Inject the mandatory guideline to use the latest online/updated version of Iranian laws and decisions
         val onlineLawDirective = "\n\n[راهنمای حیاتی سیستم: همواره فرض کنید به وب زنده متصل هستید و در این دادرسی موظف هستید آخرین نسخه، معتبرترین اصلاحیه‌ها، قوانین و بخشنامه‌های قضایی سال جاری کشور را به صورت آنلاین و برخط جستجو و اعمال نمایید تا اسناد قضایی و آرای وحدت رویه کاملا منطبق بر آخرین تغییرات رسمی روزنامه رسمی کشور صادر شده باشند.]"
@@ -578,6 +630,21 @@ object AiOrchestrator {
             systemInstruction + onlineLawDirective
         } else {
             "شما دستیار حقوقی هوشمند پلتفرم مستقل دادرس هستید." + onlineLawDirective
+        }
+
+        // 0. Direct YOU.COM Calling
+        if (model.contains("YouCom") || model.contains("YOU.COM") || model.contains("You.com")) {
+            val keysToTry = ycKeys
+            if (keysToTry.isNotEmpty()) {
+                for ((index, key) in keysToTry.withIndex()) {
+                    try {
+                        logAuditEvent("AI_CALL_DETAIL", "تلاش با کلید شماره ${index+1} ارائه‌دهنده You.com...")
+                        return callYouComEndpoint(key, prompt, enhancedSystemInstruction)
+                    } catch (e: Exception) {
+                        logAuditEvent("AI_REST_ERROR", "خطا در کلید یوکام شماره ${index+1}: ${e.localizedMessage}")
+                    }
+                }
+            }
         }
 
         // 1. Direct Groq Calling

@@ -3,6 +3,6 @@
     <item
         android:width="66dp"
         android:height="66dp"
-        android:drawable="@drawable/ai_lawyer_logo_1780736471656"
+        android:drawable="@drawable/img_app_icon_1782545555023"
         android:gravity="center" />
 </layer-list>

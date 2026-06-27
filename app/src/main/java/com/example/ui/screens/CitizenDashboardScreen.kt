@@ -42,9 +42,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import com.example.data.CaseEntity
 import com.example.data.LegalResourceEntity
 import com.example.data.AppDatabase
-import com.example.ui.components.FrostedGlassBackground
-import com.example.ui.components.glassy3D
-import com.example.ui.components.PersianFirstUtils
+import com.example.ui.components.*
 import com.example.ui.theme.*
 import com.example.viewmodel.AuthViewModel
 import com.example.viewmodel.CitizenViewModel
@@ -85,6 +83,7 @@ fun CitizenDashboardScreen(
     val curGroqKeys by adminViewModel.groqApiKeys.collectAsState()
     val curCohereKeys by adminViewModel.cohereApiKeys.collectAsState()
     val curHuggingFaceKeys by adminViewModel.huggingfaceApiKeys.collectAsState()
+    val curYouComKeys by adminViewModel.youcomApiKeys.collectAsState()
 
     var tempGeminiKeys by remember(curGeminiKeys) { mutableStateOf(curGeminiKeys) }
     var tempOpenRouterKeys by remember(curOpenRouterKeys) { mutableStateOf(curOpenRouterKeys) }
@@ -92,13 +91,61 @@ fun CitizenDashboardScreen(
     var tempGroqKeys by remember(curGroqKeys) { mutableStateOf(curGroqKeys) }
     var tempCohereKeys by remember(curCohereKeys) { mutableStateOf(curCohereKeys) }
     var tempHuggingFaceKeys by remember(curHuggingFaceKeys) { mutableStateOf(curHuggingFaceKeys) }
+    var tempYouComKeys by remember(curYouComKeys) { mutableStateOf(curYouComKeys) }
 
     val curProxyUrl by adminViewModel.geminiProxyUrl.collectAsState()
     var tempProxyUrl by remember(curProxyUrl) { mutableStateOf(curProxyUrl) }
 
     val revealedKeys = remember { mutableStateMapOf<String, Boolean>() }
-    var showGuideForProvider by remember { mutableStateOf<String?>(null) }
+    var activeGuideInfo by remember { mutableStateOf<ApiGuideInfo?>(null) }
     var apiKeysSavedSuccess by remember { mutableStateOf(false) }
+
+    var importedFileContent by remember { mutableStateOf("") }
+    var showWizardDialog by remember { mutableStateOf(false) }
+    var showHealthDashboard by remember { mutableStateOf(false) }
+
+    if (showHealthDashboard) {
+        ApiKeyHealthDashboardDialog(
+            adminViewModel = adminViewModel,
+            onDismiss = { showHealthDashboard = false }
+        )
+    }
+
+    if (showWizardDialog) {
+        ApiKeyImportWizardDialog(
+            fileContent = importedFileContent,
+            onDismiss = { showWizardDialog = false },
+            onConfirmSave = { gemini, openRouter, openAi, groq, cohere, huggingFace, youcom ->
+                val gList = (gemini + listOf("", "", "")).take(3)
+                val orList = (openRouter + listOf("", "", "")).take(3)
+                val oaList = (openAi + listOf("", "", "")).take(3)
+                val grList = (groq + listOf("", "", "")).take(3)
+                val coList = (cohere + listOf("", "", "")).take(3)
+                val hfList = (huggingFace + listOf("", "", "")).take(3)
+                val ycList = (youcom + listOf("", "", "")).take(3)
+                
+                adminViewModel.saveMultiApiKeys(
+                    gemini = gList,
+                    openRouter = orList,
+                    openAi = oaList,
+                    groq = grList,
+                    cohere = coList,
+                    huggingFace = hfList,
+                    youcom = ycList,
+                    proxyUrl = tempProxyUrl
+                )
+                tempGeminiKeys = gList
+                tempOpenRouterKeys = orList
+                tempOpenAiKeys = oaList
+                tempGroqKeys = grList
+                tempCohereKeys = coList
+                tempHuggingFaceKeys = hfList
+                tempYouComKeys = ycList
+                showWizardDialog = false
+                apiKeysSavedSuccess = true
+            }
+        )
+    }
 
     // Analysis Tab states
     var selectedAnalysisDocs by remember { mutableStateOf<List<Pair<String, String>>>(emptyList()) }
@@ -319,12 +366,26 @@ fun CitizenDashboardScreen(
                         topBar = {
                             CenterAlignedTopAppBar(
                                 title = {
-                                    Text(
-                                        text = "پایانه دادگستری هوشمند دادرس",
-                                        style = Typography.titleLarge,
-                                        color = AccentGold,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        androidx.compose.foundation.Image(
+                                            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.img_app_icon_1782545555023),
+                                            contentDescription = "Logo",
+                                            contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                                            modifier = Modifier
+                                                .size(36.dp)
+                                                .clip(CircleShape)
+                                                .border(1.dp, AccentGold.copy(alpha = 0.5f), CircleShape)
+                                        )
+                                        Text(
+                                            text = "پایانه دادگستری هوشمند دادرس",
+                                            style = Typography.titleLarge,
+                                            color = AccentGold,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 },
                                 navigationIcon = {
                                     IconButton(
@@ -793,7 +854,7 @@ fun CitizenDashboardScreen(
                                                 Divider(color = glassBorderColor.copy(alpha = 0.5f))
 
                                                 Text("انتخاب مدل‌ برتر دادرسی سیستم:", style = Typography.titleSmall, color = AccentGold, fontWeight = FontWeight.Bold)
-                                                val engines = listOf("Gemini 1.5 Pro", "Claude 3.5 Sonnet", "GPT-4o Enterprise", "DeepSeek Llama-3")
+                                                val engines = listOf("Gemini 1.5 Pro", "Claude 3.5 Sonnet", "GPT-4o Enterprise", "DeepSeek Llama-3", "YOU.COM AI (رایگان)")
                                                 Row(
                                                     modifier = Modifier
                                                         .fillMaxWidth()
@@ -1546,7 +1607,45 @@ fun CitizenDashboardScreen(
                                                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                                     horizontalAlignment = Alignment.End
                                                 ) {
-                                                    Text("آدرس سرور پروکسی اختصاصی (اختیاری جهت رفع فیلترینگ):", style = Typography.labelMedium, color = onBgColor, fontWeight = FontWeight.Bold)
+                                                    ApiKeyFileImportTrigger(
+                                                        onFileContentReady = { content ->
+                                                            importedFileContent = content
+                                                            showWizardDialog = true
+                                                        },
+                                                        buttonColor = AccentGold
+                                                    )
+
+                                                    Spacer(modifier = Modifier.height(10.dp))
+
+                                                    Button(
+                                                        onClick = { showHealthDashboard = true },
+                                                        colors = ButtonDefaults.buttonColors(containerColor = SoftEmerald),
+                                                        shape = RoundedCornerShape(12.dp),
+                                                        modifier = Modifier.fillMaxWidth().height(48.dp)
+                                                    ) {
+                                                        Row(
+                                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                            verticalAlignment = Alignment.CenterVertically
+                                                        ) {
+                                                            Icon(Icons.Default.HealthAndSafety, contentDescription = null, tint = Color.White)
+                                                            Text("سامانه آنلاین پایش سلامت و سهمیه درگاه‌های هوش (چراغ LED)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                        }
+                                                    }
+
+                                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                                    ApiKeyServiceSection(
+                                                         title = "کلیدهای اختصاصی Google Gemini API (تا ۳ کلید با اولویت بالا به پایین):",
+                                                         guideTitle = "راهنمای اتصال Google Gemini",
+                                                         onOpenGuide = { activeGuideInfo = geminiGuide },
+                                                         keys = tempGeminiKeys,
+                                                         onKeysChange = { tempGeminiKeys = it },
+                                                         placeholderPrefix = "کلید جمینای"
+                                                     )
+
+                                                     Spacer(modifier = Modifier.height(4.dp))
+
+                                                     Text("آدرس سرور پروکسی اختصاصی (اختیاری جهت رفع فیلترینگ):", style = Typography.labelMedium, color = onBgColor, fontWeight = FontWeight.Bold)
                                                     Spacer(modifier = Modifier.height(4.dp))
                                                     OutlinedTextField(
                                                         value = tempProxyUrl,
@@ -1575,95 +1674,79 @@ fun CitizenDashboardScreen(
                                                     }
                                                 }
 
-                                                // Google Gemini key field style filling
-                                                ProviderApiSection(
-                                                    providerName = "Google AI Gemini (کنترل هوشمند)",
-                                                    apiKeys = tempGeminiKeys,
-                                                    fieldsToShow = 1,
-                                                    revealedKeys = revealedKeys,
-                                                    onKeyChange = { index, value ->
-                                                        val newList = tempGeminiKeys.toMutableList()
-                                                        while (newList.size <= index) newList.add("")
-                                                        newList[index] = value
-                                                        tempGeminiKeys = newList
-                                                    },
-                                                    onShowGuide = { showGuideForProvider = "gemini" }
+
+
+                                                // 2. OpenRouter API Keys
+                                                ApiKeyServiceSection(
+                                                    title = "کلیدهای اختصاصی OpenRouter API (تا ۳ کلید با اولویت بالا به پایین):",
+                                                    guideTitle = "راهنمای اتصال OpenRouter",
+                                                    onOpenGuide = { activeGuideInfo = openRouterGuide },
+                                                    keys = tempOpenRouterKeys,
+                                                    onKeysChange = { tempOpenRouterKeys = it },
+                                                    placeholderPrefix = "کلید اپن‌روتر"
                                                 )
 
-                                                // OpenAI credentials
-                                                ProviderApiSection(
-                                                    providerName = "OpenAI GPT-4",
-                                                    apiKeys = tempOpenAiKeys,
-                                                    fieldsToShow = 1,
-                                                    revealedKeys = revealedKeys,
-                                                    onKeyChange = { index, value ->
-                                                        val newList = tempOpenAiKeys.toMutableList()
-                                                        while (newList.size <= index) newList.add("")
-                                                        newList[index] = value
-                                                        tempOpenAiKeys = newList
-                                                    },
-                                                    onShowGuide = { showGuideForProvider = "openai" }
-                                                 )
+                                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
 
-                                                 // OpenRouter API Section
-                                                 ProviderApiSection(
-                                                     providerName = "دروازه جامع OpenRouter",
-                                                     apiKeys = tempOpenRouterKeys,
-                                                     fieldsToShow = 1,
-                                                     revealedKeys = revealedKeys,
-                                                     onKeyChange = { index, value ->
-                                                         val newList = tempOpenRouterKeys.toMutableList()
-                                                         while (newList.size <= index) newList.add("")
-                                                         newList[index] = value
-                                                         tempOpenRouterKeys = newList
-                                                     },
-                                                     onShowGuide = { showGuideForProvider = "openrouter" }
-                                                 )
-
-                                                 // Groq API Section
-                                                 ProviderApiSection(
-                                                     providerName = "دروازه پرسرعت Groq (رایگان)",
-                                                     apiKeys = tempGroqKeys,
-                                                     fieldsToShow = 1,
-                                                     revealedKeys = revealedKeys,
-                                                     onKeyChange = { index, value ->
-                                                         val newList = tempGroqKeys.toMutableList()
-                                                         while (newList.size <= index) newList.add("")
-                                                         newList[index] = value
-                                                         tempGroqKeys = newList
-                                                     },
-                                                     onShowGuide = { showGuideForProvider = "groq" }
-                                                 )
-
-                                                 // Cohere API Section
-                                                 ProviderApiSection(
-                                                     providerName = "دروازه چندزبانه Cohere",
-                                                     apiKeys = tempCohereKeys,
-                                                     fieldsToShow = 1,
-                                                     revealedKeys = revealedKeys,
-                                                     onKeyChange = { index, value ->
-                                                         val newList = tempCohereKeys.toMutableList()
-                                                         while (newList.size <= index) newList.add("")
-                                                         newList[index] = value
-                                                         tempCohereKeys = newList
-                                                     },
-                                                     onShowGuide = { showGuideForProvider = "cohere" }
-                                                 )
-
-                                                 // HuggingFace API Section
-                                                 ProviderApiSection(
-                                                     providerName = "توکن محلی Hugging Face",
-                                                     apiKeys = tempHuggingFaceKeys,
-                                                     fieldsToShow = 1,
-                                                     revealedKeys = revealedKeys,
-                                                     onKeyChange = { index, value ->
-                                                         val newList = tempHuggingFaceKeys.toMutableList()
-                                                         while (newList.size <= index) newList.add("")
-                                                         newList[index] = value
-                                                         tempHuggingFaceKeys = newList
-                                                     },
-                                                     onShowGuide = { showGuideForProvider = "huggingface" }
+                                                // 3. OpenAI API Keys
+                                                ApiKeyServiceSection(
+                                                    title = "کلیدهای اختصاصی OpenAI API (تا ۳ کلید با اولویت بالا به پایین):",
+                                                    guideTitle = "راهنمای اتصال OpenAI",
+                                                    onOpenGuide = { activeGuideInfo = openAiGuide },
+                                                    keys = tempOpenAiKeys,
+                                                    onKeysChange = { tempOpenAiKeys = it },
+                                                    placeholderPrefix = "کلید اپن‌ای‌آی"
                                                 )
+
+                                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                                                // 4. Groq API Keys
+                                                ApiKeyServiceSection(
+                                                    title = "کلیدهای اختصاصی Groq API (تا ۳ کلید با اولویت بالا به پایین):",
+                                                    guideTitle = "راهنمای اتصال Groq Cloud",
+                                                    onOpenGuide = { activeGuideInfo = groqGuide },
+                                                    keys = tempGroqKeys,
+                                                    onKeysChange = { tempGroqKeys = it },
+                                                    placeholderPrefix = "کلید گراک"
+                                                )
+
+                                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                                                // 5. Cohere API Keys
+                                                ApiKeyServiceSection(
+                                                    title = "کلیدهای اختصاصی Cohere API (تا ۳ کلید با اولویت بالا به پایین):",
+                                                    guideTitle = "راهنمای اتصال Cohere AI",
+                                                    onOpenGuide = { activeGuideInfo = cohereGuide },
+                                                    keys = tempCohereKeys,
+                                                    onKeysChange = { tempCohereKeys = it },
+                                                    placeholderPrefix = "کلید کوهر"
+                                                )
+
+                                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                                                // 6. Hugging Face Access Tokens
+                                                ApiKeyServiceSection(
+                                                    title = "کلیدهای اختصاصی Hugging Face API (تا ۳ کلید با اولویت بالا به پایین):",
+                                                    guideTitle = "راهنمای اتصال Hugging Face",
+                                                    onOpenGuide = { activeGuideInfo = huggingFaceGuide },
+                                                    keys = tempHuggingFaceKeys,
+                                                    onKeysChange = { tempHuggingFaceKeys = it },
+                                                    placeholderPrefix = "کلید هاگینگ‌فیس"
+                                                )
+
+                                                Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                                                // 7. YouCom Access Tokens
+                                                ApiKeyServiceSection(
+                                                    title = "کلیدهای اختصاصی You.com API (تا ۳ کلید با اولویت بالا به پایین):",
+                                                    guideTitle = "راهنمای اتصال You.com",
+                                                    onOpenGuide = { activeGuideInfo = youcomGuide },
+                                                    keys = tempYouComKeys,
+                                                    onKeysChange = { tempYouComKeys = it },
+                                                    placeholderPrefix = "کلید یوکام"
+                                                )
+
+                                                Spacer(modifier = Modifier.height(16.dp))
 
                                                 Button(
                                                     onClick = {
@@ -1673,7 +1756,9 @@ fun CitizenDashboardScreen(
                                                             openAi = tempOpenAiKeys,
                                                             groq = tempGroqKeys,
                                                             cohere = tempCohereKeys,
-                                                            huggingFace = tempHuggingFaceKeys, proxyUrl = tempProxyUrl
+                                                            huggingFace = tempHuggingFaceKeys,
+                                                            youcom = tempYouComKeys,
+                                                            proxyUrl = tempProxyUrl
                                                         )
                                                         apiKeysSavedSuccess = true
                                                         scope.launch {
@@ -2047,6 +2132,108 @@ fun CitizenDashboardScreen(
                 }
             }
         }
+    }
+
+    if (activeGuideInfo != null) {
+        val guide = activeGuideInfo!!
+        AlertDialog(
+            onDismissRequest = { activeGuideInfo = null },
+            confirmButton = {
+                Button(
+                    onClick = { activeGuideInfo = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGold)
+                ) {
+                    Text("متوجه شدم", color = Color.White)
+                }
+            },
+            dismissButton = {
+                val ctx = LocalContext.current
+                OutlinedButton(
+                    onClick = {
+                        try {
+                            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(guide.linkUrl))
+                            ctx.startActivity(intent)
+                        } catch (e: Exception) {
+                            e.printStackTrace()
+                        }
+                    },
+                    border = androidx.compose.foundation.BorderStroke(1.dp, AccentGold)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null, tint = AccentGold, modifier = Modifier.size(16.dp))
+                        Text(guide.linkLabel, color = AccentGold, style = Typography.labelSmall)
+                    }
+                }
+            },
+            title = {
+                Text(
+                    text = guide.title,
+                    style = Typography.titleMedium,
+                    color = AccentGold,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Right,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 450.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = guide.description,
+                        style = Typography.bodyMedium,
+                        color = Color.White,
+                        textAlign = TextAlign.Right
+                    )
+                    
+                    Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                    Text(text = "مراحل ثبت نام اولیه:", style = Typography.labelMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                    guide.regSteps.forEach { step ->
+                        Text(text = step, style = Typography.bodySmall, color = Color.LightGray, textAlign = TextAlign.Right)
+                    }
+
+                    Text(text = "مراحل دریافت کلید API:", style = Typography.labelMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                    guide.apiSteps.forEach { step ->
+                        Text(text = step, style = Typography.bodySmall, color = Color.LightGray, textAlign = TextAlign.Right)
+                    }
+
+                    Text(text = "صفحه مدیریت کلیدها در سایت:", style = Typography.labelMedium, color = AccentGold, fontWeight = FontWeight.Bold)
+                    guide.manageSteps.forEach { step ->
+                        Text(text = step, style = Typography.bodySmall, color = Color.LightGray, textAlign = TextAlign.Right)
+                    }
+
+                    Divider(color = glassBorderColor.copy(alpha = 0.3f))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(text = guide.freeTier, style = Typography.bodySmall, color = Color(0xFF10B981), textAlign = TextAlign.Right)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "نسخه رایگان:", style = Typography.labelSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Text(text = guide.limits, style = Typography.bodySmall, color = Color(0xFFEF4444), textAlign = TextAlign.Right)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(text = "محدودیت‌ها / الزامات:", style = Typography.labelSmall, color = AccentGold, fontWeight = FontWeight.Bold)
+                    }
+                }
+            },
+            containerColor = Color(0xFF1E293B)
+        )
     }
 }
 

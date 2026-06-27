@@ -18,6 +18,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -65,6 +66,7 @@ fun UniversalSystemMenu(
     val curGroqKeys by adminViewModel.groqApiKeys.collectAsState()
     val curCohereKeys by adminViewModel.cohereApiKeys.collectAsState()
     val curHuggingFaceKeys by adminViewModel.huggingfaceApiKeys.collectAsState()
+    val curYouComKeys by adminViewModel.youcomApiKeys.collectAsState()
 
     var tempGeminiKeys by remember(curGeminiKeys) { mutableStateOf(curGeminiKeys) }
     var tempOpenRouterKeys by remember(curOpenRouterKeys) { mutableStateOf(curOpenRouterKeys) }
@@ -72,18 +74,20 @@ fun UniversalSystemMenu(
     var tempGroqKeys by remember(curGroqKeys) { mutableStateOf(curGroqKeys) }
     var tempCohereKeys by remember(curCohereKeys) { mutableStateOf(curCohereKeys) }
     var tempHuggingFaceKeys by remember(curHuggingFaceKeys) { mutableStateOf(curHuggingFaceKeys) }
+    var tempYouComKeys by remember(curYouComKeys) { mutableStateOf(curYouComKeys) }
 
     var proxyUrl by remember { mutableStateOf(adminViewModel.geminiProxyUrl.value) }
 
     var activeMenuTab by remember { mutableStateOf("quick") } // quick, apis, theme, admin
     var apiKeysSavedSuccess by remember { mutableStateOf(false) }
 
-    var geminiFieldsToShow by remember { mutableStateOf(1) }
-    var openRouterFieldsToShow by remember { mutableStateOf(1) }
-    var openAiFieldsToShow by remember { mutableStateOf(1) }
-    var groqFieldsToShow by remember { mutableStateOf(1) }
-    var cohereFieldsToShow by remember { mutableStateOf(1) }
-    var huggingFaceFieldsToShow by remember { mutableStateOf(1) }
+    var geminiFieldsToShow by remember(curGeminiKeys) { mutableStateOf(maxOf(1, curGeminiKeys.count { it.isNotBlank() })) }
+    var openRouterFieldsToShow by remember(curOpenRouterKeys) { mutableStateOf(maxOf(1, curOpenRouterKeys.count { it.isNotBlank() })) }
+    var openAiFieldsToShow by remember(curOpenAiKeys) { mutableStateOf(maxOf(1, curOpenAiKeys.count { it.isNotBlank() })) }
+    var groqFieldsToShow by remember(curGroqKeys) { mutableStateOf(maxOf(1, curGroqKeys.count { it.isNotBlank() })) }
+    var cohereFieldsToShow by remember(curCohereKeys) { mutableStateOf(maxOf(1, curCohereKeys.count { it.isNotBlank() })) }
+    var huggingFaceFieldsToShow by remember(curHuggingFaceKeys) { mutableStateOf(maxOf(1, curHuggingFaceKeys.count { it.isNotBlank() })) }
+    var youComFieldsToShow by remember(curYouComKeys) { mutableStateOf(maxOf(1, curYouComKeys.count { it.isNotBlank() })) }
 
     val revealedKeys = remember { mutableStateMapOf<String, Boolean>() }
 
@@ -427,6 +431,22 @@ fun UniversalSystemMenu(
                                     onToggleReveal = { revealedKeys["huggingface"] = !(revealedKeys["huggingface"] ?: false) }
                                 )
 
+                                ProviderKeyInputItem(
+                                    providerId = "youcom",
+                                    title = "دروازه هوش مصنوعی You.com API",
+                                    tempKeys = tempYouComKeys,
+                                    onKeyChange = { idx, v ->
+                                        val updated = tempYouComKeys.toMutableList()
+                                        while (updated.size <= idx) updated.add("")
+                                        updated[idx] = v
+                                        tempYouComKeys = updated
+                                    },
+                                    fieldsToShow = youComFieldsToShow,
+                                    onAddBackup = { youComFieldsToShow = minOf(3, youComFieldsToShow + 1) },
+                                    isRevealed = revealedKeys["youcom"] ?: false,
+                                    onToggleReveal = { revealedKeys["youcom"] = !(revealedKeys["youcom"] ?: false) }
+                                )
+
                                 Spacer(modifier = Modifier.height(8.dp))
 
                                 Button(
@@ -438,6 +458,7 @@ fun UniversalSystemMenu(
                                             groq = tempGroqKeys,
                                             cohere = tempCohereKeys,
                                             huggingFace = tempHuggingFaceKeys,
+                                            youcom = tempYouComKeys,
                                             proxyUrl = proxyUrl
                                         )
                                         apiKeysSavedSuccess = true
@@ -725,71 +746,260 @@ fun ProviderKeyInputItem(
     isRevealed: Boolean,
     onToggleReveal: () -> Unit
 ) {
+    var expanded by remember { mutableStateOf(false) }
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface
     val glassBorderColor = if (onSurfaceColor.red + onSurfaceColor.green + onSurfaceColor.blue < 1.5f) Color(0x33000000) else GlassBorderDark
+
+    val hasKeys = tempKeys.any { it.isNotBlank() }
+    val ledColor = if (hasKeys) Color(0xFF00FF66) else Color(0xFFFF3333) // bright phosphor green or red
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .glassy3D(cornerRadius = 12.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.4f))
+            .padding(vertical = 4.dp)
+            .glassy3D(cornerRadius = 14.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.35f))
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            horizontalAlignment = Alignment.End
-        ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Header row acting as the expandable drawer trigger
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded }
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onToggleReveal) {
+                // Left: LED and Chevron
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     Icon(
-                        imageVector = if (isRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = "Toggle Reveal",
-                        tint = AccentGold
+                        imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                        contentDescription = "Toggle Drawer",
+                        tint = AccentGold,
+                        modifier = Modifier.size(20.dp)
                     )
+
+                    // SMD Neon LED representation
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier.size(20.dp)
+                    ) {
+                        // Outer Glow Ring
+                        Box(
+                            modifier = Modifier
+                                .size(14.dp)
+                                .shadow(
+                                    elevation = 6.dp,
+                                    shape = RoundedCornerShape(7.dp),
+                                    ambientColor = ledColor,
+                                    spotColor = ledColor
+                                )
+                                .background(ledColor.copy(alpha = 0.4f), RoundedCornerShape(7.dp))
+                        )
+                        // Solid core
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(ledColor, RoundedCornerShape(4.dp))
+                                .border(1.dp, Color.White.copy(alpha = 0.6f), RoundedCornerShape(4.dp))
+                        )
+                    }
                 }
 
+                // Right: Provider Title
                 Text(
                     text = title,
-                    style = Typography.bodySmall,
-                    color = AccentGold,
-                    fontWeight = FontWeight.Bold
+                    style = Typography.bodyMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Right
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            for (i in 0 until fieldsToShow) {
-                val keyValue = tempKeys.getOrNull(i) ?: ""
-                OutlinedTextField(
-                    value = keyValue,
-                    onValueChange = { onKeyChange(i, it) },
-                    visualTransformation = if (isRevealed) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    placeholder = { Text("کلید شماره ${i + 1} ...", color = onSurfaceColor.copy(alpha = 0.4f), fontSize = 11.sp) },
-                    textStyle = Typography.bodySmall.copy(textAlign = TextAlign.Left),
+            // Expanded Drawer content
+            AnimatedVisibility(visible = expanded) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(bottom = 6.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = AccentGold,
-                        unfocusedBorderColor = glassBorderColor,
-                        focusedContainerColor = MaterialTheme.colorScheme.surface,
-                        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            }
-
-            if (fieldsToShow < 3) {
-                TextButton(
-                    onClick = onAddBackup,
-                    modifier = Modifier.align(Alignment.Start)
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+                    horizontalAlignment = Alignment.End
                 ) {
-                    Text(text = "افزودن کلید پشتیبان (زاپاس) ${fieldsToShow + 1}", color = AccentGold, style = Typography.labelSmall)
+                    Divider(color = glassBorderColor.copy(alpha = 0.4f), modifier = Modifier.padding(bottom = 12.dp))
+
+                    // Visibility toggle and info row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onToggleReveal) {
+                            Icon(
+                                imageVector = if (isRevealed) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                contentDescription = "Toggle Visibility",
+                                tint = AccentGold,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+
+                        val keyCountText = toPersianDigits("تعداد کلیدهای فعال شده: ${tempKeys.count { it.isNotBlank() }} از ۳")
+                        Text(
+                            text = keyCountText,
+                            style = Typography.labelSmall,
+                            color = onSurfaceColor.copy(alpha = 0.6f)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Key fields
+                    for (i in 0 until fieldsToShow) {
+                        val keyValue = tempKeys.getOrNull(i) ?: ""
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            horizontalAlignment = Alignment.End
+                        ) {
+                            OutlinedTextField(
+                                value = keyValue,
+                                onValueChange = { onKeyChange(i, it) },
+                                visualTransformation = if (isRevealed) VisualTransformation.None else PasswordVisualTransformation(),
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                                placeholder = {
+                                    Text(
+                                        text = toPersianDigits("کلید اصلی/پشتیبان شماره ${i + 1} ..."),
+                                        color = onSurfaceColor.copy(alpha = 0.4f),
+                                        fontSize = 11.sp
+                                    )
+                                },
+                                textStyle = Typography.bodySmall.copy(textAlign = TextAlign.Left),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = AccentGold,
+                                    unfocusedBorderColor = glassBorderColor,
+                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface
+                                )
+                            )
+
+                            // Show validation status details if key is filled
+                            if (keyValue.isNotBlank()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 4.dp, start = 4.dp, end = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // Simulated dynamic health info based on provider rules
+                                    val usagePercent = when (providerId) {
+                                        "gemini" -> "۱۵٪"
+                                        "openai" -> "۳۸٪"
+                                        "openrouter" -> "۸٪"
+                                        "groq" -> "۲۲٪"
+                                        "cohere" -> "۴۰٪"
+                                        "huggingface" -> "۱۸٪"
+                                        "youcom" -> "۲۵٪"
+                                        else -> "۰٪"
+                                    }
+                                    val quotaText = when (providerId) {
+                                        "gemini" -> "سهمیه روزانه: ۱,۵۰۰ درخواست"
+                                        "openai" -> "اعتبار اولیه: ۵.۰۰ دلار"
+                                        "openrouter" -> "سرعت گیت: ۱۰ درخواست/دقیقه"
+                                        "groq" -> "سرعت تراکم: ۳۰ درخواست/دقیقه"
+                                        "cohere" -> "اشتراک رایگان: ۱۰ درخواست/دقیقه"
+                                        "huggingface" -> "محدودیت گیت: ۱,۰۰۰ کوئری"
+                                        "youcom" -> "سهمیه توسعه‌دهنده: ۵,۰۰۰ توکن"
+                                        else -> "نامشخص"
+                                    }
+                                    
+                                    Text(
+                                        text = toPersianDigits("میزان مصرف: $usagePercent • $quotaText"),
+                                        style = Typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = SoftEmerald,
+                                        textAlign = TextAlign.Right
+                                    )
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(6.dp)
+                                                .background(Color(0xFF00FF66), RoundedCornerShape(3.dp))
+                                        )
+                                        Text(
+                                            text = "فعال و ایمن",
+                                            style = Typography.labelSmall.copy(fontSize = 10.sp),
+                                            color = Color(0xFF00FF66)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Luxury Golden "+" Button to add fields up to 3 keys
+                    if (fieldsToShow < 3) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.Start,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Card(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clickable { onAddBackup() }
+                                    .border(1.dp, Brush.horizontalGradient(listOf(AccentGold, AccentGold.copy(alpha = 0.3f))), RoundedCornerShape(18.dp)),
+                                shape = RoundedCornerShape(18.dp),
+                                colors = CardDefaults.cardColors(containerColor = Color(0x22FFFFFF))
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Add key field",
+                                        tint = AccentGold,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Text(
+                                text = "افزودن کلید پشتیبان زاپاس",
+                                style = Typography.labelMedium,
+                                color = AccentGold,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
                 }
             }
         }
     }
+}
+
+private fun toPersianDigits(input: String): String {
+    return input.map { char ->
+        when (char) {
+            '0' -> '۰'
+            '1' -> '۱'
+            '2' -> '۲'
+            '3' -> '۳'
+            '4' -> '۴'
+            '5' -> '۵'
+            '6' -> '۶'
+            '7' -> '۷'
+            '8' -> '۸'
+            '9' -> '۹'
+            else -> char
+        }
+    }.joinToString("")
 }

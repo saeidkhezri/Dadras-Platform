@@ -349,6 +349,9 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
     private val _huggingfaceApiKeys = MutableStateFlow<List<String>>(emptyList())
     val huggingfaceApiKeys = _huggingfaceApiKeys.asStateFlow()
 
+    private val _youcomApiKeys = MutableStateFlow<List<String>>(emptyList())
+    val youcomApiKeys = _youcomApiKeys.asStateFlow()
+
     init {
         val prefs = application.getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
         
@@ -376,6 +379,9 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
                 editor.putString("huggingface_key_1", "")
                 editor.putString("huggingface_key_2", "")
                 editor.putString("huggingface_key_3", "")
+                editor.putString("youcom_key_1", "")
+                editor.putString("youcom_key_2", "")
+                editor.putString("youcom_key_3", "")
                 editor.putBoolean("keys_initialized", true)
             }
             if (!prefs.contains("gemini_proxy_url")) {
@@ -386,6 +392,7 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
             editor.putString("groq_proxy_url", prefs.getString("groq_proxy_url", "https://api.groq.com/"))
             editor.putString("cohere_proxy_url", prefs.getString("cohere_proxy_url", "https://api.cohere.com/"))
             editor.putString("huggingface_proxy_url", prefs.getString("huggingface_proxy_url", "https://api-inference.huggingface.co/"))
+            editor.putString("youcom_proxy_url", prefs.getString("youcom_proxy_url", "https://api.you.com/"))
             editor.apply()
         }
 
@@ -412,6 +419,11 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         val hf1 = prefs.getString("huggingface_key_1", "") ?: ""
         val hf2 = prefs.getString("huggingface_key_2", "") ?: ""
         val hf3 = prefs.getString("huggingface_key_3", "") ?: ""
+
+        val yc1 = prefs.getString("youcom_key_1", "") ?: ""
+        val yc2 = prefs.getString("youcom_key_2", "") ?: ""
+        val yc3 = prefs.getString("youcom_key_3", "") ?: ""
+
         val proxyUrl = prefs.getString("gemini_proxy_url", "https://generativelanguage.googleapis.com/") ?: "https://generativelanguage.googleapis.com/"
 
         _geminiApiKeys.value = listOf(g1, g2, g3)
@@ -420,6 +432,7 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         _groqApiKeys.value = listOf(gr1, gr2, gr3)
         _cohereApiKeys.value = listOf(co1, co2, co3)
         _huggingfaceApiKeys.value = listOf(hf1, hf2, hf3)
+        _youcomApiKeys.value = listOf(yc1, yc2, yc3)
         _geminiProxyUrl.value = proxyUrl
 
         _geminiApiKey.value = g1.ifBlank { g2.ifBlank { g3 } }
@@ -447,6 +460,7 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         com.example.network.AiOrchestrator.groqKeysList = _groqApiKeys.value.filter { it.isNotBlank() }
         com.example.network.AiOrchestrator.cohereKeysList = _cohereApiKeys.value.filter { it.isNotBlank() }
         com.example.network.AiOrchestrator.huggingfaceKeysList = _huggingfaceApiKeys.value.filter { it.isNotBlank() }
+        com.example.network.AiOrchestrator.youcomKeysList = _youcomApiKeys.value.filter { it.isNotBlank() }
 
         // همگام‌سازی آدرس‌های پروکسی ثبت شده
         val prefs = getApplication<Application>().getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
@@ -455,13 +469,14 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         com.example.network.AiOrchestrator.groqBaseUrl = prefs.getString("groq_proxy_url", "https://api.groq.com/") ?: "https://api.groq.com/"
         com.example.network.AiOrchestrator.cohereBaseUrl = prefs.getString("cohere_proxy_url", "https://api.cohere.com/") ?: "https://api.cohere.com/"
         com.example.network.AiOrchestrator.huggingFaceBaseUrl = prefs.getString("huggingface_proxy_url", "https://api-inference.huggingface.co/") ?: "https://api-inference.huggingface.co/"
+        com.example.network.AiOrchestrator.youcomBaseUrl = prefs.getString("youcom_proxy_url", "https://api.you.com/") ?: "https://api.you.com/"
     }
 
     fun saveApiKeys(gemini: String, openRouter: String, openAi: String) {
         val geminiList = listOf(gemini, "", "")
         val openRouterList = listOf(openRouter, "", "")
         val openAiList = listOf(openAi, "", "")
-        saveMultiApiKeys(geminiList, openRouterList, openAiList, listOf("", "", ""), listOf("", "", ""), listOf("", "", ""), _geminiProxyUrl.value)
+        saveMultiApiKeys(geminiList, openRouterList, openAiList, listOf("", "", ""), listOf("", "", ""), listOf("", "", ""), listOf("", "", ""), _geminiProxyUrl.value)
     }
 
     fun saveMultiApiKeys(
@@ -471,6 +486,7 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         groq: List<String>,
         cohere: List<String>,
         huggingFace: List<String>,
+        youcom: List<String> = listOf("", "", ""),
         proxyUrl: String = "https://generativelanguage.googleapis.com/"
     ) {
         val prefs = getApplication<Application>().getSharedPreferences("admin_ai_keys", Context.MODE_PRIVATE)
@@ -482,6 +498,7 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         val grList = (groq.map { it.trim() } + listOf("", "", "")).take(3)
         val coList = (cohere.map { it.trim() } + listOf("", "", "")).take(3)
         val hfList = (huggingFace.map { it.trim() } + listOf("", "", "")).take(3)
+        val ycList = (youcom.map { it.trim() } + listOf("", "", "")).take(3)
 
         for (i in 0..2) {
             editor.putString("gemini_key_${i+1}", gList[i])
@@ -490,6 +507,7 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
             editor.putString("groq_key_${i+1}", grList[i])
             editor.putString("cohere_key_${i+1}", coList[i])
             editor.putString("huggingface_key_${i+1}", hfList[i])
+            editor.putString("youcom_key_${i+1}", ycList[i])
         }
         editor.putString("gemini_proxy_url", proxyUrl)
         editor.putBoolean("keys_initialized", true)
@@ -501,6 +519,7 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
         _groqApiKeys.value = grList
         _cohereApiKeys.value = coList
         _huggingfaceApiKeys.value = hfList
+        _youcomApiKeys.value = ycList
         _geminiProxyUrl.value = proxyUrl
 
         _geminiApiKey.value = gList.firstOrNull { it.isNotBlank() } ?: ""
